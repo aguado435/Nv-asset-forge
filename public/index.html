@@ -129,6 +129,19 @@ textarea{resize:vertical;min-height:84px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);padding:9px 14px;border-radius:9px;z-index:60;display:none;max-width:80vw}
 .toast.show{display:block}
 .toast.err{border-color:var(--err)}
+details.sec{border-top:1px solid var(--line);margin-top:18px;padding-top:12px}
+details.sec summary{cursor:pointer;list-style:none;font-size:11.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);font-weight:600;display:flex;justify-content:space-between}
+details.sec summary::after{content:'+';color:var(--dim)} details.sec[open] summary::after{content:'–'}
+details.sec summary::-webkit-details-marker{display:none}
+.refbox{display:flex;gap:10px;align-items:center;margin-top:8px}
+.refbox img{width:64px;height:64px;object-fit:contain;border:1px solid var(--line);border-radius:8px}
+.games{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.games a{display:flex;justify-content:space-between;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;text-decoration:none;color:var(--text);font-size:12.5px;background:var(--panel2)}
+.games a.on{border-color:var(--acc)}
+.games small{color:var(--dim)}
+.card.pick{outline:2px solid var(--warn);outline-offset:-2px}
+.card .pk{position:absolute;top:6px;right:6px;font:600 10px var(--mono);background:var(--warn);color:#000;padding:1px 5px;border-radius:4px}
+#animPrev{position:absolute;right:12px;bottom:12px;width:160px;height:160px;background:rgba(12,14,17,.8);border:1px solid var(--line2);border-radius:8px;display:none;image-rendering:pixelated}
 @media (max-width:1100px){main{grid-template-columns:320px 1fr}.panel.right{display:none}}
 @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:auto 70vh}.app{height:auto}}
 </style>
@@ -139,6 +152,7 @@ textarea{resize:vertical;min-height:84px}
   <div class="logo"><i></i>NV Asset Forge <small>2D · 3D game assets</small></div>
   <div class="spacer"></div>
   <div class="proj">Proyecto <input type="text" id="project" placeholder="MiJuego"></div>
+  <div class="pill" id="blPill" title="Blender se usa para optimizar modelos y renderizar"><span class="dot" id="blDot"></span><span id="blTxt">Blender…</span></div>
   <div class="pill" id="keyPill"><span class="dot" id="keyDot"></span><span id="keyTxt">Sin API key</span></div>
   <button class="btn ghost" id="openLib" title="Abrir la carpeta de la biblioteca">📁 Carpeta</button>
   <button class="btn" id="openSettings">⚙ Ajustes</button>
@@ -162,7 +176,12 @@ textarea{resize:vertical;min-height:84px}
       <div><label for="variants">Variantes</label><select id="variants"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
       <div><label for="seed">Semilla</label><input type="number" id="seed" placeholder="aleatoria"></div>
     </div>
-    <label class="chk"><input type="checkbox" id="enhance" checked> Optimizar prompt con LLM de NVIDIA</label>
+    <div class="row">
+      <div id="imgModelWrap"><label for="genImgModel">Modelo de imagen</label><select id="genImgModel"></select></div>
+      <div id="m3dWrap"><label for="gen3dModel">Modelo 3D</label><select id="gen3dModel"></select></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="enhance" checked> Optimizar prompt con LLM</label>
+    <label class="chk" id="useRefWrap" style="display:none"><input type="checkbox" id="useRef"> Copiar el estilo de la imagen de referencia del proyecto</label>
     <button class="btn" id="btnPlan" style="margin-top:10px;width:100%">Ver / editar prompt optimizado</button>
     <div class="plan" id="plan">
       <div class="src" id="planSrc"></div>
@@ -176,6 +195,23 @@ textarea{resize:vertical;min-height:84px}
     </div>
     <button class="btn pri big" id="btnGen">Generar asset</button>
     <div class="log" id="log"></div>
+
+    <details class="sec" id="secStyle">
+      <summary>Estilo del proyecto (colección)</summary>
+      <label for="bible">Guía de estilo que heredan todos los assets</label>
+      <textarea id="bible" placeholder="Ej.: pixel art 32px, paleta fría de 16 colores, contorno negro de 1px, luz desde arriba a la izquierda, ambiente nórdico"></textarea>
+      <div class="refbox"><img id="refImg" alt="" style="display:none"><div class="hint" id="refTxt">Sin imagen de referencia. Abre un asset y pulsa “Usar como referencia”.</div></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" id="setRef">Usar asset actual como referencia</button><button class="btn sm" id="clrRef">Quitar</button><div class="spacer"></div><button class="btn sm pri" id="saveStyle">Guardar estilo</button></div>
+    </details>
+
+    <details class="sec" id="secGame">
+      <summary>Prototipo jugable</summary>
+      <label for="gamePrompt">Describe el juego</label>
+      <textarea id="gamePrompt" placeholder="Ej.: plataformas 2D donde el caballero orco salta entre rocas y esquiva murciélagos; 3 vidas; gana al llegar a 1000 puntos"></textarea>
+      <div class="hint" id="gameAssetsHint">Usará los 12 assets más recientes del proyecto. Ctrl+clic en la biblioteca para elegir cuáles.</div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" id="btnGame" style="flex:1">Crear juego</button><button class="btn" id="btnGameFix" title="Aplica la descripción como cambio al juego seleccionado">Mejorar seleccionado</button></div>
+      <div class="games" id="games"></div>
+    </details>
   </aside>
 
   <!-- Visor / render local -->
@@ -192,6 +228,7 @@ textarea{resize:vertical;min-height:84px}
       <div id="tile"></div>
       <div id="v3d"></div>
       <div class="stats" id="stats"></div>
+      <canvas id="animPrev"></canvas>
       <div class="busy" id="busy"><div class="spin"></div><div id="busyTxt">Trabajando…</div></div>
     </div>
     <!-- Herramientas 2D (locales) -->
@@ -201,6 +238,8 @@ textarea{resize:vertical;min-height:84px}
       <div class="tg"><span>Tile</span><button class="btn sm" id="tSeam">Hacer tileable</button><button class="btn sm" id="tTile">Ver mosaico</button></div>
       <div class="tg"><span>Tamaño</span><select id="potSel"><option value="0">POT auto</option><option>2048</option><option>1024</option><option>512</option><option>256</option><option>128</option><option>64</option><option>32</option></select><button class="btn sm" id="tResize">Redimensionar</button></div>
       <div class="tg"><button class="btn sm" id="tUndo">↶ Deshacer</button><button class="btn sm pri" id="tSave">Guardar versión</button><button class="btn sm" id="tDl">⬇ PNG</button></div>
+      <div class="tg" id="animMake"><span>Animar</span><select id="animSel"></select><button class="btn sm" id="tAnim">Generar fotogramas</button></div>
+      <div class="tg" id="animBuild" style="display:none"><span>Sprite sheet</span><input type="number" id="animH" value="128" min="16" max="1024" title="Alto de cada fotograma (px)"><input type="number" id="animFps" value="8" min="1" max="30" title="FPS"><button class="btn sm pri" id="tSheet">Montar sprite sheet</button><button class="btn sm" id="tPlay">▶ Vista previa</button></div>
       <div class="tg"><span>IA</span><input type="text" id="editTxt" placeholder="Variación: ahora corriendo, vista lateral…"><button class="btn sm" id="tEdit">Variación</button><button class="btn sm" id="tTo3d">→ 3D</button></div>
     </div>
     <!-- Herramientas 3D (render local) -->
@@ -208,6 +247,7 @@ textarea{resize:vertical;min-height:84px}
       <div class="tg"><button class="btn sm" id="rRot">⟳ Rotar</button><button class="btn sm" id="rWire">Wireframe</button><button class="btn sm" id="rGrid">Rejilla</button><button class="btn sm" id="rBg">Fondo</button></div>
       <div class="tg"><span>Luz</span><input type="range" id="rLight" min="0" max="300" value="100"></div>
       <div class="tg"><span>Sprite sheet</span><select id="ssDirs"><option value="4">4 dir</option><option value="8" selected>8 dir</option><option value="16">16 dir</option></select><select id="ssSize"><option>128</option><option selected>256</option><option>512</option></select><input type="number" id="ssElev" value="30" min="0" max="90" title="Elevación de cámara (º)"><button class="btn sm pri" id="rSheet">Renderizar</button></div>
+      <div class="tg"><span>Blender</span><input type="number" id="bH" value="1.8" step="0.1" min="0" title="Altura real en metros (0 = no cambiar)"><input type="number" id="bTris" value="20000" step="1000" min="0" title="Máximo de triángulos LOD0 (0 = sin límite)"><button class="btn sm pri" id="bProc">Optimizar + LODs + FBX</button><select id="bEng"><option value="eevee">Eevee</option><option value="cycles">Cycles</option></select><button class="btn sm pri" id="bRender">Render Blender</button></div>
       <div class="tg"><button class="btn sm" id="rShot">Render HD PNG</button><button class="btn sm" id="rThumb">Miniatura</button><button class="btn sm" id="rCopy">⬇ GLB</button></div>
     </div>
   </section>
@@ -233,10 +273,19 @@ textarea{resize:vertical;min-height:84px}
     <input type="password" id="sKey" placeholder="nvapi-…">
     <div class="hint">Gratis en <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a> → cualquier modelo → “Get API Key”.</div>
     <div class="row">
-      <div><label for="sImg">Modelo de imagen</label><select id="sImg"></select></div>
+      <div><label for="sImg">Modelo de imagen por defecto</label><select id="sImg"></select></div>
+      <div><label for="sM3d">Modelo 3D por defecto</label><select id="sM3d"></select></div>
+    </div>
+    <div class="row">
+      <div><label for="sCImg">Otro modelo de imagen (ruta en build.nvidia.com)</label><input type="text" id="sCImg" placeholder="publisher/modelo, p. ej. stabilityai/sdxl-turbo"></div>
+      <div><label for="sC3d">Otro modelo 3D (ruta)</label><input type="text" id="sC3d" placeholder="publisher/modelo"></div>
+    </div>
+    <div class="row">
+      <div><label for="sCode">Modelo LLM para crear juegos</label><input type="text" id="sCode" list="llmList"></div>
       <div><label for="sProv">LLM que optimiza los prompts</label><select id="sProv"><option value="nvidia">NVIDIA Build</option><option value="local">Local compatible OpenAI (FreeLLMAPI)</option></select></div>
     </div>
-    <div id="provNv"><label for="sLlm">Modelo LLM de NVIDIA</label><input type="text" id="sLlm"></div>
+    <div id="provNv"><label for="sLlm">Modelo LLM de NVIDIA</label><input type="text" id="sLlm" list="llmList"></div>
+    <datalist id="llmList"></datalist>
     <div id="provLocal">
       <div class="row">
         <div><label for="sLu">URL base</label><input type="text" id="sLu" placeholder="http://localhost:31415/v1"></div>
@@ -255,6 +304,10 @@ textarea{resize:vertical;min-height:84px}
       <div><label for="sB3">3D (TRELLIS)</label><select id="sB3"><option value="cloud">Nube NVIDIA</option><option value="local">NIM local</option></select></div>
       <div><label for="sL3">URL NIM 3D</label><input type="text" id="sL3"></div>
     </div>
+    <div class="sep"></div>
+    <label for="sBl">Blender (vacío = detectar automáticamente)</label>
+    <div class="row" style="grid-template-columns:1fr auto"><input type="text" id="sBl" placeholder="C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe"><button class="btn" id="sBlTest">Detectar</button></div>
+    <div class="hint" id="sBlRes">Gratis en blender.org. Se usa para optimizar modelos, LODs, FBX y renders de calidad.</div>
     <div class="sep"></div>
     <label for="sLib">Carpeta de la biblioteca</label>
     <input type="text" id="sLib">
@@ -301,37 +354,81 @@ async function loadConfig() {
       $('#category').append(og);
     }
     for (const [id, l] of Object.entries(CFG.styles)) $('#style').append(new Option(l, id));
-    for (const [k, l] of Object.entries(CFG.imageModels)) $('#sImg').append(new Option(l, k));
+    for (const [k, l] of Object.entries(CFG.anims)) $('#animSel').append(new Option(l, k));
     $('#category').value = LS.get('category', '2d-character');
     $('#style').value = LS.get('style', 'auto');
     onCategory();
   }
+  fillSel('#sImg', CFG.imageModels, CFG.imageModel); fillSel('#sM3d', CFG.models3d, CFG.model3d);
+  fillSel('#genImgModel', CFG.imageModels, LS.get('imgModel', CFG.imageModel)); fillSel('#gen3dModel', CFG.models3d, LS.get('m3d', CFG.model3d));
+  $('#llmList').innerHTML = CFG.llmSuggestions.map((m) => `<option value="${m}">`).join('');
   if (!CFG.hasKey) openSettings();
+}
+function fillSel(sel, obj, val) { const el = $(sel); el.innerHTML = ''; for (const [k, l] of Object.entries(obj)) el.append(new Option(l, k)); el.value = obj[val] ? val : Object.keys(obj)[0]; }
+$('#genImgModel').onchange = () => LS.set('imgModel', $('#genImgModel').value);
+$('#gen3dModel').onchange = () => LS.set('m3d', $('#gen3dModel').value);
+async function checkBlender(refresh) {
+  try {
+    const b = await api('/api/blender' + (refresh ? '?refresh=1' : ''));
+    $('#blDot').classList.toggle('ok', b.found); $('#blTxt').textContent = b.found ? 'Blender ' + b.version : 'Sin Blender';
+    $('#blPill').title = b.found ? b.path : 'No se encontró Blender. Instálalo desde blender.org o indica la ruta en Ajustes.';
+    return b;
+  } catch { return { found: false }; }
 }
 function onCategory() {
   const t = CFG.types[$('#category').value]; if (!t) return;
   $('#catHint').textContent = t.hint;
   $('#size').value = t.size;
   $('#sizeWrap').style.visibility = t.kind === '3d' ? 'hidden' : 'visible';
+  const cat = $('#category').value;
+  $('#imgModelWrap').style.visibility = cat === '3d-text' ? 'hidden' : 'visible';
+  $('#m3dWrap').style.visibility = t.kind === '3d' ? 'visible' : 'hidden';
+  $('#useRefWrap').style.display = PROJ.refAssetId && cat !== '3d-text' ? 'flex' : 'none';
   LS.set('category', $('#category').value);
 }
 $('#category').onchange = () => { onCategory(); clearPlan(); };
 $('#style').onchange = () => { LS.set('style', $('#style').value); clearPlan(); };
-$('#project').onchange = () => LS.set('project', $('#project').value.trim());
+$('#project').onchange = () => { LS.set('project', $('#project').value.trim()); loadProject(); loadGames(); };
+
+// ───────── Estilo del proyecto (colección) ─────────
+let PROJ = {};
+async function loadProject() {
+  PROJ = await api('/api/project?name=' + encodeURIComponent($('#project').value.trim())).catch(() => ({}));
+  $('#bible').value = PROJ.bible || '';
+  const ref = PROJ.refAssetId && ASSETS.find((a) => a.id === PROJ.refAssetId);
+  if (ref) { const f = PROJ.refFile && ref.files.includes(PROJ.refFile) ? PROJ.refFile : (ref.files.includes('source.png') ? 'source.png' : 'concept.png'); $('#refImg').src = ref.url + f; $('#refImg').style.display = 'block'; $('#refTxt').textContent = `Referencia: ${ref.name}. Marca “Copiar el estilo…” al generar.`; }
+  else { $('#refImg').style.display = 'none'; $('#refTxt').textContent = 'Sin imagen de referencia. Abre un asset 2D y pulsa “Usar como referencia”.'; }
+  if (CFG) onCategory();
+}
+async function saveProject(patch) { PROJ = await post('/api/project?name=' + encodeURIComponent($('#project').value.trim()), patch); await loadProject(); }
+$('#saveStyle').onclick = async () => { await saveProject({ bible: $('#bible').value }); toast('Estilo del proyecto guardado'); };
+$('#setRef').onclick = async () => {
+  if (!CUR) return toast('Abre primero el asset que quieres usar como referencia', 1);
+  const f = /\.png$/i.test(CURFILE || '') ? CURFILE : (CUR.files.includes('concept.png') ? 'concept.png' : 'source.png');
+  await saveProject({ refAssetId: CUR.id, refFile: f, bible: $('#bible').value }); toast('Referencia de estilo guardada');
+};
+$('#clrRef').onclick = () => saveProject({ refAssetId: '', refFile: '' });
 
 // ───────── Ajustes ─────────
 function openSettings() {
   $('#sKey').value = CFG.apiKey; $('#sLlm').value = CFG.llmModel; $('#sProv').value = CFG.llmProvider; $('#sLu').value = CFG.llmLocalUrl; $('#sLm').value = CFG.llmLocalModel; $('#sLk').value = CFG.llmLocalKey; provToggle(); $('#sImg').value = CFG.imageModel;
   $('#sB2').value = CFG.backend2d; $('#sB3').value = CFG.backend3d; $('#sL2').value = CFG.local2dUrl; $('#sL3').value = CFG.local3dUrl;
   $('#sLib').value = CFG.libraryPath; $('#testRes').textContent = '';
+  $('#sM3d').value = CFG.model3d; $('#sCImg').value = CFG.customImagePath; $('#sC3d').value = CFG.custom3dPath; $('#sCode').value = CFG.codeModel; $('#sBl').value = CFG.blenderPath;
   $('#settings').classList.add('show');
 }
 async function saveSettings() {
-  await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value });
-  await loadConfig(); await loadLibrary();
+  await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value, model3d: $('#sM3d').value, customImagePath: $('#sCImg').value, custom3dPath: $('#sC3d').value, codeModel: $('#sCode').value, blenderPath: $('#sBl').value });
+  await loadConfig(); await loadLibrary(); checkBlender(true);
 }
 function provToggle() { const l = $('#sProv').value === 'local'; $('#provLocal').style.display = l ? 'block' : 'none'; $('#provNv').style.display = l ? 'none' : 'block'; }
 $('#sProv').onchange = provToggle;
+$('#sBlTest').onclick = async () => {
+  $('#sBlRes').textContent = 'Buscando Blender…';
+  await post('/api/config', { blenderPath: $('#sBl').value }); await loadConfig();
+  const b = await checkBlender(true);
+  $('#sBlRes').innerHTML = b.found ? `<span style="color:var(--ok)">✔ Blender ${b.version}</span> · ${b.path}` : '<span style="color:var(--err)">✖ No encontrado.</span> Instálalo gratis desde blender.org o pega la ruta a blender.exe.';
+};
 $('#openSettings').onclick = openSettings;
 $('#sClose').onclick = () => $('#settings').classList.remove('show');
 $('#sSave').onclick = async () => { try { await saveSettings(); $('#settings').classList.remove('show'); toast('Ajustes guardados'); } catch (e) { toast(e.message, 1); } };
@@ -369,7 +466,7 @@ function renderLog(lines) {
   el.scrollTop = el.scrollHeight;
 }
 async function runJob(body, label) {
-  $('#btnGen').disabled = true; busy(true, label);
+  $('#btnGen').disabled = $('#btnGame').disabled = true; busy(true, label);
   try {
     const { jobId } = await post('/api/generate', { project: $('#project').value.trim(), ...body });
     let j;
@@ -381,17 +478,18 @@ async function runJob(body, label) {
       if (j.status !== 'running') break;
     }
     await loadLibrary();
-    if (j.assets.length) openAsset(j.assets[0].id);
-    if (j.status === 'error') toast(j.error, 1); else toast(`${j.assets.length} asset(s) creado(s)`);
+    if (j.game) { await loadGames(j.game.id); window.open(j.game.url, '_blank'); }
+    else if (j.assets.length) await openAsset(j.assets[0].id);
+    if (j.status === 'error') toast(j.error, 1); else toast(j.game ? 'Juego listo: se abre en otra pestaña' : `${j.assets.length} asset(s) listo(s)`);
   } catch (e) { toast(e.message, 1); }
-  busy(false); $('#btnGen').disabled = false;
+  busy(false); $('#btnGen').disabled = $('#btnGame').disabled = false;
 }
 $('#btnGen').onclick = () => {
   const prompt = $('#prompt').value.trim(); if (!prompt) return toast('Describe el asset que quieres', 1);
   if (!CFG.hasKey && (CFG.backend2d === 'cloud' || CFG.backend3d === 'cloud')) { openSettings(); return toast('Añade tu API key de NVIDIA', 1); }
   const key = prompt + '|' + $('#category').value + '|' + $('#style').value;
   const plan = PLAN_FOR === key ? { image_prompt: $('#planImg').value, trellis_prompt: $('#planTrellis').value, name: $('#planName').value } : null;
-  runJob({ prompt, category: $('#category').value, style: $('#style').value, size: $('#size').value, quality: $('#quality').value, variants: $('#variants').value, seed: $('#seed').value, enhance: $('#enhance').checked, plan }, 'Generando con NVIDIA…');
+  runJob({ prompt, category: $('#category').value, style: $('#style').value, size: $('#size').value, quality: $('#quality').value, variants: $('#variants').value, seed: $('#seed').value, enhance: $('#enhance').checked, plan, imageModel: $('#genImgModel').value, model3d: $('#gen3dModel').value, useRef: $('#useRef').checked && $('#useRefWrap').style.display !== 'none' }, 'Generando con NVIDIA…');
 };
 $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#btnGen').click(); });
 
@@ -403,13 +501,15 @@ function renderGrid() {
   const g = $('#grid'); g.innerHTML = '';
   if (!list.length) { g.innerHTML = `<div class="libempty">${ASSETS.length ? 'Nada coincide con el filtro.' : 'Aún no hay assets.'}</div>`; return; }
   for (const a of list) {
-    const thumb = a.files.includes('thumb.png') ? 'thumb.png' : a.kind === '2d' ? (a.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png') : a.files.includes('concept.png') ? 'concept.png' : null;
-    const c = document.createElement('div'); c.className = 'card' + (CUR && CUR.id === a.id ? ' sel' : '');
-    c.innerHTML = `<span class="k">${a.kind.toUpperCase()}</span><div class="th checker">${thumb ? `<img loading="lazy" src="${a.url}${thumb}?v=${a.files.length}">` : '<span class="ph">GLB</span>'}</div><div class="cap" title="${a.prompt || ''}">${a.name}</div>`;
-    c.onclick = () => openAsset(a.id);
+    const thumb = a.files.includes('thumb.png') ? 'thumb.png' : a.category === '2d-anim' ? (a.files.find((f) => /_sheet_/.test(f)) || 'frame_01.png') : a.kind === '2d' ? (a.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png') : a.files.includes('concept.png') ? 'concept.png' : null;
+    const c = document.createElement('div'); c.className = 'card' + (CUR && CUR.id === a.id ? ' sel' : '') + (PICK.has(a.id) ? ' pick' : '');
+    c.innerHTML = `${PICK.has(a.id) ? '<span class="pk">JUEGO</span>' : ''}<span class="k">${a.category === '2d-anim' ? 'ANIM' : a.kind.toUpperCase()}</span><div class="th checker">${thumb ? `<img loading="lazy" src="${a.url}${thumb}?v=${a.files.length}">` : '<span class="ph">GLB</span>'}</div><div class="cap" title="${a.prompt || ''}">${a.name}</div>`;
+    c.onclick = (e) => { if (e.ctrlKey || e.metaKey || e.shiftKey) { PICK.has(a.id) ? PICK.delete(a.id) : PICK.add(a.id); updatePickHint(); renderGrid(); } else openAsset(a.id); };
     g.append(c);
   }
 }
+const PICK = new Set();
+function updatePickHint() { $('#gameAssetsHint').textContent = PICK.size ? `Usará ${PICK.size} asset(s) elegidos (Ctrl+clic para quitar).` : 'Usará los 12 assets más recientes del proyecto. Ctrl+clic en la biblioteca para elegir cuáles.'; }
 $('#q').oninput = renderGrid;
 $('#kindSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; KIND = b.dataset.k; [...$('#kindSeg').children].forEach((x) => x.classList.toggle('on', x === b)); renderGrid(); };
 $('#delBtn').onclick = async () => {
@@ -422,7 +522,7 @@ function setHeader() {
   $('#delBtn').disabled = !CUR;
   if (!CUR) { $('#aName').textContent = 'Sin asset seleccionado'; $('#aChips').innerHTML = ''; $('#aFiles').innerHTML = ''; return; }
   $('#aName').textContent = CUR.name;
-  const ch = [[CUR.kind.toUpperCase(), 1], [CFG.types[CUR.category]?.label || CUR.category], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
+  const ch = [[CUR.kind.toUpperCase(), 1], [CUR.category === '2d-anim' ? `Animación ${CUR.anim} · ${CUR.frames} fot.` : (CFG.types[CUR.category]?.label || CUR.category)], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
   $('#aChips').innerHTML = ch.map(([t, a]) => `<span class="chip ${a ? 'a' : ''}">${t}</span>`).join('');
   $('#aChips').title = CUR.imagePrompt || CUR.prompt || '';
   const f = $('#aFiles'); f.innerHTML = '';
@@ -444,7 +544,11 @@ function showView(v) {
 }
 async function openAsset(id) {
   CUR = await api('/api/assets/' + id);
-  const def = CUR.kind === '3d' ? 'model.glb' : (CUR.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png');
+  const def = CUR.kind === '3d' ? (CUR.files.find((f) => /_optimized\.glb$/.test(f)) || 'model.glb') : CUR.category === '2d-anim' ? (CUR.files.find((f) => /_sheet_/.test(f)) || 'frame_01.png') : (CUR.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png');
+  const isAnim = CUR.category === '2d-anim';
+  $('#animBuild').style.display = isAnim ? 'flex' : 'none'; $('#animMake').style.display = isAnim ? 'none' : 'flex';
+  if (isAnim) $('#animFps').value = CUR.fps || 8;
+  stopAnim();
   renderGrid();
   await openFile(CUR.files.includes(def) ? def : CUR.files[0]);
 }
@@ -476,8 +580,9 @@ function cornerColor(d, w, h) {
   const med = (k) => pts.map((p) => p[k]).sort((a, b) => a - b)[pts.length >> 1];
   return [med(0), med(1), med(2)];
 }
-function removeBg(tol) {
-  const w = cv.width, h = cv.height, id = ctx.getImageData(0, 0, w, h), d = id.data;
+function removeBg(tol, target = cv) {
+  const tx = target.getContext('2d', { willReadFrequently: true });
+  const w = target.width, h = target.height, id = tx.getImageData(0, 0, w, h), d = id.data;
   const bg = cornerColor(d, w, h);
   const dist = (p) => { const i = p * 4; const r = d[i] - bg[0], g = d[i + 1] - bg[1], b = d[i + 2] - bg[2]; return Math.sqrt(r * r + g * g + b * b); };
   const N = w * h, mark = new Uint8Array(N), st = new Int32Array(N); let sp = 0;
@@ -497,7 +602,13 @@ function removeBg(tol) {
     for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, (d[i + k] - bg[k] * (1 - a)) / a));
     d[i + 3] = Math.round(d[i + 3] * a);
   }
-  ctx.putImageData(id, 0, 0);
+  tx.putImageData(id, 0, 0);
+}
+function alphaBox(c) {
+  const w = c.width, h = c.height, d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 function autoCrop(pad = 8) {
   const w = cv.width, h = cv.height, d = ctx.getImageData(0, 0, w, h).data;
@@ -582,6 +693,79 @@ $('#tEdit').onclick = () => {
   const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
   runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
 };
+// ───────── Animaciones ─────────
+$('#tAnim').onclick = () => {
+  if (!CUR) return;
+  runJob({ action: 'animate', assetId: CUR.id, file: CURFILE, anim: $('#animSel').value, quality: $('#quality').value }, 'Generando fotogramas con FLUX Kontext…');
+};
+let ANIM = null;
+function stopAnim() { if (ANIM) clearInterval(ANIM.t); ANIM = null; $('#animPrev').style.display = 'none'; }
+async function buildSheet() {
+  const frames = CUR.files.filter((f) => /^frame_\d+\.png$/.test(f)).sort();
+  if (!frames.length) throw new Error('Este asset no tiene fotogramas');
+  const tol = +$('#tol').value, H = Math.max(16, Math.min(1024, +$('#animH').value || 128));
+  const cs = [];
+  for (const f of frames) {
+    const img = await loadImg(CUR.url + f + '?t=' + Date.now());
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+    removeBg(tol, c); const b = alphaBox(c); if (b) cs.push({ c, b });
+  }
+  if (!cs.length) throw new Error('No se detectó el personaje en los fotogramas');
+  // misma escala para todos: el personaje más alto ocupa el 92% de la celda
+  const maxH = Math.max(...cs.map((x) => x.b.h)), maxW = Math.max(...cs.map((x) => x.b.w));
+  const k = (H * 0.92) / maxH, W = Math.max(8, Math.ceil(Math.max(H, maxW * k / 0.92)));
+  const sheet = document.createElement('canvas'); sheet.width = W * cs.length; sheet.height = H;
+  const sx = sheet.getContext('2d'); sx.imageSmoothingQuality = 'high';
+  cs.forEach(({ c, b }, i) => {
+    const dw = b.w * k, dh = b.h * k;
+    sx.drawImage(c, b.x0, b.y0, b.w, b.h, i * W + (W - dw) / 2, H - dh - H * 0.04, dw, dh); // alineado por los pies
+  });
+  return { sheet, W, H, n: cs.length };
+}
+$('#tSheet').onclick = async () => {
+  if (!CUR) return; busy(true, 'Montando sprite sheet en local…');
+  try {
+    const { sheet, W, H, n } = await buildSheet();
+    const name = `${CUR.anim || 'anim'}_sheet_${W}x${H}_n${n}.png`;
+    CUR = await post(`/api/assets/${CUR.id}/file`, { name, data: sheet.toDataURL('image/png') });
+    await loadLibrary(); await openFile(name); playAnim(sheet, W, H, n); toast('Sprite sheet guardado: ' + name);
+  } catch (e) { toast(e.message, 1); }
+  busy(false);
+};
+function playAnim(sheet, W, H, n) {
+  stopAnim(); const pc = $('#animPrev'); pc.width = W; pc.height = H; pc.style.display = 'block'; pc.style.width = Math.round(160 * W / Math.max(W, H)) + 'px'; pc.style.height = Math.round(160 * H / Math.max(W, H)) + 'px';
+  const px = pc.getContext('2d'); let i = 0;
+  ANIM = { t: setInterval(() => { px.clearRect(0, 0, W, H); px.drawImage(sheet, (i % n) * W, 0, W, H, 0, 0, W, H); i++; }, 1000 / Math.max(1, +$('#animFps').value || 8)) };
+}
+$('#tPlay').onclick = async () => {
+  if (ANIM) return stopAnim();
+  const f = CUR && CUR.files.find((x) => /_sheet_(\d+)x(\d+)_n(\d+)\.png$/.test(x));
+  if (!f) return toast('Primero pulsa “Montar sprite sheet”', 1);
+  const [, W, H, n] = f.match(/_sheet_(\d+)x(\d+)_n(\d+)\.png$/).map(Number);
+  playAnim(await loadImg(CUR.url + f), W, H, n);
+};
+
+// ───────── Blender ─────────
+$('#bProc').onclick = () => { if (!CUR) return; runJob({ action: 'blender-process', assetId: CUR.id, height: +$('#bH').value || 0, maxTris: +$('#bTris').value || 0 }, 'Blender: limpiando, escalando, LODs y exportando…'); };
+$('#bRender').onclick = () => { if (!CUR) return; runJob({ action: 'blender-render', assetId: CUR.id, directions: $('#ssDirs').value, size: $('#ssSize').value, elevation: $('#ssElev').value, engine: $('#bEng').value, quality: $('#quality').value }, 'Blender: renderizando…'); };
+
+// ───────── Juegos ─────────
+let GAMES = [], GAME_SEL = null;
+async function loadGames(selId) {
+  GAMES = await api('/api/games?project=' + encodeURIComponent($('#project').value.trim())).catch(() => []);
+  if (selId) GAME_SEL = selId;
+  $('#games').innerHTML = GAMES.map((g) => `<a href="${g.url}" target="_blank" data-id="${g.id}" class="${g.id === GAME_SEL ? 'on' : ''}"><span>🎮 ${g.title.replace(/</g, '&lt;')}</span><small>${(g.history || []).length} v.</small></a>`).join('') || '<div class="hint">Aún no hay juegos en este proyecto.</div>';
+  $('#games').querySelectorAll('a').forEach((a) => a.addEventListener('click', () => { GAME_SEL = a.dataset.id; loadGames(); }));
+}
+$('#btnGame').onclick = () => {
+  const d = $('#gamePrompt').value.trim(); if (!d) return toast('Describe el juego', 1);
+  runJob({ action: 'game', prompt: d, assetIds: [...PICK] }, 'Escribiendo el juego con un LLM de NVIDIA…');
+};
+$('#btnGameFix').onclick = () => {
+  if (!GAME_SEL) return toast('Haz clic en un juego de la lista para seleccionarlo', 1);
+  runJob({ action: 'game', gameId: GAME_SEL, prompt: $('#gamePrompt').value.trim(), assetIds: [...PICK] }, 'Mejorando el juego…');
+};
+
 $('#tTo3d').onclick = () => { if (!CUR) return; runJob({ action: 'to3d', assetId: CUR.id, file: CURFILE, quality: $('#quality').value }, 'Reconstruyendo en 3D con TRELLIS…'); };
 
 // ───────── Render 3D local (three.js) ─────────
@@ -680,6 +864,7 @@ $('#rSheet').onclick = async () => {
 showView('empty');
 await loadConfig().catch((e) => toast('No conecta con el servidor local: ' + e.message, 1));
 await loadLibrary().catch(() => {});
+loadProject(); loadGames(); checkBlender();
 </script>
 </body>
 </html>
