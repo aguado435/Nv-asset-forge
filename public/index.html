@@ -204,6 +204,21 @@ details.sec summary::-webkit-details-marker{display:none}
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" id="setRef">Usar asset actual como referencia</button><button class="btn sm" id="clrRef">Quitar</button><div class="spacer"></div><button class="btn sm pri" id="saveStyle">Guardar estilo</button></div>
     </details>
 
+    <details class="sec" id="secWorld" open>
+      <summary>Diseñador de mundos</summary>
+      <label for="worldTpl">Partir de</label>
+      <select id="worldTpl"><option value="">Mundo nuevo desde cero</option></select>
+      <label for="worldPrompt">Describe el mundo o los cambios</label>
+      <textarea id="worldPrompt" placeholder="Ej.: añade un volcán al este, un puerto pirata en la bahía del sur y un pantano con ruinas junto al río"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" id="btnWorld" style="flex:1">Diseñar mundo</button><button class="btn" id="btnWorldMod" title="Aplica los cambios al mundo abierto">Modificar este</button></div>
+      <div class="hint">El LLM escribe la receta, Blender la construye con módulos de calidad y un director de arte la revisa. Requiere Blender.</div>
+      <div id="worldEdit" style="display:none">
+        <label for="worldJson">Receta del mundo abierto (JSON editable)</label>
+        <textarea id="worldJson" style="min-height:180px;font-family:var(--mono);font-size:11.5px"></textarea>
+        <button class="btn" id="btnWorldBuild" style="margin-top:8px;width:100%">Reconstruir con esta receta</button>
+      </div>
+    </details>
+
     <details class="sec" id="secGame">
       <summary>Prototipo jugable</summary>
       <label for="gamePrompt">Describe el juego</label>
@@ -525,7 +540,7 @@ function setHeader() {
   $('#delBtn').disabled = !CUR;
   if (!CUR) { $('#aName').textContent = 'Sin asset seleccionado'; $('#aChips').innerHTML = ''; $('#aFiles').innerHTML = ''; return; }
   $('#aName').textContent = CUR.name;
-  const ch = [[CUR.kind.toUpperCase(), 1], [CUR.category === '2d-anim' ? `Animación ${CUR.anim} · ${CUR.frames} fot.` : (CFG.types[CUR.category]?.label || CUR.category)], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
+  const ch = [[CUR.kind.toUpperCase(), 1], [CUR.category === 'world' ? `Mundo · ${CUR.worldName || ''}` : CUR.category === '2d-anim' ? `Animación ${CUR.anim} · ${CUR.frames} fot.` : (CFG.types[CUR.category]?.label || CUR.category)], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
   $('#aChips').innerHTML = ch.map(([t, a]) => `<span class="chip ${a ? 'a' : ''}">${t}</span>`).join('');
   $('#aChips').title = CUR.imagePrompt || CUR.prompt || '';
   const f = $('#aFiles'); f.innerHTML = '';
@@ -547,7 +562,10 @@ function showView(v) {
 }
 async function openAsset(id) {
   CUR = await api('/api/assets/' + id);
-  const def = CUR.kind === '3d' ? (CUR.files.find((f) => /_optimized\.glb$/.test(f)) || 'model.glb') : CUR.category === '2d-anim' ? (CUR.files.find((f) => /_sheet_/.test(f)) || 'frame_01.png') : (CUR.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png');
+  const isWorld = CUR.category === 'world';
+  $('#worldEdit').style.display = isWorld ? 'block' : 'none';
+  if (isWorld) fetch(CUR.url + 'world.json?t=' + Date.now()).then((r) => r.text()).then((t) => { $('#worldJson').value = t; }).catch(() => {});
+  const def = isWorld ? 'world.png' : CUR.kind === '3d' ? (CUR.files.find((f) => /_optimized\.glb$/.test(f)) || 'model.glb') : CUR.category === '2d-anim' ? (CUR.files.find((f) => /_sheet_/.test(f)) || 'frame_01.png') : (CUR.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png');
   const isAnim = CUR.category === '2d-anim';
   $('#animBuild').style.display = isAnim ? 'flex' : 'none'; $('#animMake').style.display = isAnim ? 'none' : 'flex';
   if (isAnim) $('#animFps').value = CUR.fps || 8;
@@ -752,6 +770,26 @@ $('#tPlay').onclick = async () => {
 $('#bProc').onclick = () => { if (!CUR) return; runJob({ action: 'blender-process', assetId: CUR.id, height: +$('#bH').value || 0, maxTris: +$('#bTris').value || 0 }, 'Blender: limpiando, escalando, LODs y exportando…'); };
 $('#bRender').onclick = () => { if (!CUR) return; runJob({ action: 'blender-render', assetId: CUR.id, directions: $('#ssDirs').value, size: $('#ssSize').value, elevation: $('#ssElev').value, engine: $('#bEng').value, quality: $('#quality').value }, 'Blender: renderizando…'); };
 
+// ───────── Mundos ─────────
+async function loadWorldTemplates() {
+  const list = await api('/api/world-templates').catch(() => []);
+  for (const t of list) $('#worldTpl').append(new Option(`Plantilla: ${t.name}`, t.id));
+}
+$('#btnWorld').onclick = () => {
+  const p = $('#worldPrompt').value.trim(), tpl = $('#worldTpl').value;
+  if (!p && !tpl) return toast('Describe el mundo o elige una plantilla', 1);
+  runJob({ action: 'world', prompt: p, template: tpl, quality: $('#quality').value }, tpl && !p ? 'Construyendo la plantilla en Blender…' : 'Diseñando el mundo con NVIDIA + Blender…');
+};
+$('#btnWorldMod').onclick = () => {
+  if (!CUR || CUR.category !== 'world') return toast('Abre primero un mundo de la biblioteca', 1);
+  const p = $('#worldPrompt').value.trim(); if (!p) return toast('Escribe qué quieres cambiar', 1);
+  runJob({ action: 'world', prompt: p, worldId: CUR.id, quality: $('#quality').value }, 'Modificando el mundo…');
+};
+$('#btnWorldBuild').onclick = () => {
+  let spec; try { spec = JSON.parse($('#worldJson').value); } catch (e) { return toast('JSON no válido: ' + e.message, 1); }
+  runJob({ action: 'world', spec, worldId: CUR && CUR.id, quality: $('#quality').value }, 'Reconstruyendo el mundo con tu receta…');
+};
+
 // ───────── Juegos ─────────
 let GAMES = [], GAME_SEL = null;
 async function loadGames(selId) {
@@ -867,7 +905,7 @@ $('#rSheet').onclick = async () => {
 showView('empty');
 await loadConfig().catch((e) => toast('No conecta con el servidor local: ' + e.message, 1));
 await loadLibrary().catch(() => {});
-loadProject(); loadGames(); checkBlender();
+loadProject(); loadGames(); checkBlender(); loadWorldTemplates();
 </script>
 </body>
 </html>

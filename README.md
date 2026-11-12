@@ -153,6 +153,26 @@ Ajustes → *LLM que optimiza los prompts* → **Local compatible OpenAI**. URL 
 
 La API de NVIDIA Build es un servicio de prueba con límites de uso. Revisa la licencia de cada modelo antes de un uso comercial: **FLUX.1-dev y FLUX.1-Kontext-dev** piden licencia comercial a Black Forest Labs; **TRELLIS** es MIT; consulta la ficha de cada modelo en build.nvidia.com para los demás.
 
+## Diseñador de mundos (LLM + recetas + Blender)
+
+Un mundo es una **receta JSON**: masas de tierra (círculos o contornos de costa), biomas, cordilleras, picos, mesetas, volcanes (con nieve o lava), lagos (helados o no), ríos, caminos, gargantas, lugares emblemáticos (fortaleza, castillo, aldea, puerto, oasis, campamento, Árbol del Mundo…) y dispersión de módulos. `examples/world/worldgen.py` la construye en Blender con los módulos de calidad en ~45 s.
+
+En la app (panel *Diseñador de mundos*):
+1. **Parte de una plantilla** (Aethermoor, Kanto, Madagascar, Australia) o de cero.
+2. **Describe** el mundo o los cambios en lenguaje natural: el LLM de NVIDIA escribe/modifica la receta, se valida y Blender la construye.
+3. Un **director de arte** (modelo de visión) revisa el mapa y el LLM aplica una ronda de mejoras.
+4. **Edita la receta** a mano en el propio panel y reconstruye sin LLM.
+
+![Plantillas de geografía real](docs/img/templates.jpg)
+*Plantillas editables: Kanto, Madagascar y Australia en estilo cúbico 2D-HD.*
+
+![Mundo diseñado por el LLM](docs/img/llm_world.jpg)
+*"Cinderhaven", un archipiélago volcánico diseñado al 100 % por el LLM a partir de una frase, con planos de zona automáticos.*
+
+```bash
+blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/kanto.json --res 1600x900
+```
+
 ## Ejemplos 2D-HD (Blender)
 
 Scripts listos para ejecutar con Blender 4.x / 5.x (`blender -b -P script.py -- opciones`):

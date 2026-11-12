@@ -808,6 +808,152 @@ async function runBuild3D(cfg, job, o, log, quality, project) {
   job.status = 'done';
 }
 
+// ───────────────────────── Diseñador de mundos (LLM + recetas JSON + Blender) ─────────────────────────
+const WORLD_DIR = path.join(ROOT, 'examples', 'world');
+const WORLDGEN = path.join(WORLD_DIR, 'worldgen.py');
+const WORLD_TEMPLATES_DIR = path.join(WORLD_DIR, 'worlds');
+const W_BIOMES = ['plains', 'forest', 'farmland', 'desert', 'snow', 'mountain', 'swamp', 'volcanic', 'beach'];
+const W_COMPOSITES = ['fortress', 'castle', 'village', 'port', 'oasis', 'camp', 'world_tree'];
+const W_MODULES = ['tree0', 'tree1', 'tree2', 'pine', 'palm', 'crystal_teal', 'crystal_violet', 'ice_spike', 'windmill', 'pyramid', 'cave',
+  'lighthouse', 'boat', 'ruins', 'house', 'castle_house', 'wall_tower', 'castle_tower', 'keep', 'castle_keep', 'waterfall', 'tent', 'pier', 'bridge', 'monolith'];
+
+const WORLD_SYS = `You are the lead level designer of a JRPG studio. You design overworld maps as a JSON "recipe" that a Blender engine turns into a stylized cube-terrain 2D-HD world.
+Coordinates are meters. X goes west→east, Y goes south→north, the map lives inside "bounds" [xmin, xmax, ymin, ymax] (default [-320, 320, -240, 240]). Sea level is 0; everything outside the land circles is sea.
+Return ONLY one JSON object (no markdown) with these keys:
+- name, description (Spanish), seed (int), bounds, cell (4)
+- land: [{x, y, r}] circles whose union is the landmass, and/or land_polygons: [[[x,y],...]] coastline outlines (use them to reproduce real places) and sea_polygons (bays, inner seas cut from the land)
+- default_biome and regions: [{biome, x, y, r}] later regions override earlier ones. Biomes: ${W_BIOMES.join(', ')}
+- ridges: [{from:[x,y], to:[x,y], w, h}] mountain ranges; mountains: [{x, y, r, h}] single peaks; mesas: [{x, y, r, h}]; hills: [{x, y, r, h}]; volcanoes: [{x, y, r, h, snowcap?, dormant?}]
+- lakes: [{x, y, r, frozen}], rivers: [{points:[[x,y],...], w}] (rivers should flow from mountains or lakes to the sea), roads: [{points:[[x,y],...]}] connecting landmarks, gorges: [{from, to, w, floor}]
+- landmarks: [{type, x, y, rot, scale, z?}]. Composite types: ${W_COMPOSITES.join(', ')}. Single modules: ${W_MODULES.join(', ')}
+- scatter: [{modules:[...], x, y, r, count, scale:[min,max]}] for forests, pines, palms, crystals, ruins, tents (total count under 700)
+- floating_isles: [{x, y, z (80-130), scale}], clouds (int 0-20)
+- sun: {elev (5-80 degrees), az, energy (1-6), color:[r,g,b]} and exposure (-2..0) to set the mood (golden hour, dusk, night...)
+Design rules: a coherent, magical and readable world. Biomes must make geographic sense (snow and mountains together, deserts far from lakes, swamps near rivers, ports on the coast, castles on hills, fortresses in gorges or passes). Every landmark must sit on land, connected by roads. Leave breathing room between landmarks (>60 m). Keep 20 % of the land quiet (plains, forest) for contrast. Use the full map.`;
+
+function wNum(v, lo, hi, d) { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; }
+function sanitizeWorld(spec) {
+  const s = typeof spec === 'object' && spec ? spec : {};
+  const b = Array.isArray(s.bounds) && s.bounds.length === 4 ? s.bounds.map((v, i) => wNum(v, -600, 600, [-320, 320, -240, 240][i])) : [-320, 320, -240, 240];
+  const [x0, x1, y0, y1] = b;
+  const X = (v) => wNum(v, x0 - 200, x1 + 200, 0), Y = (v) => wNum(v, y0 - 200, y1 + 200, 0);
+  const pts = (p) => (Array.isArray(p) ? p : []).slice(0, 80).map((q) => [X(q?.[0]), Y(q?.[1])]).filter((q) => q.length === 2);
+  const arr = (a, n = 40) => (Array.isArray(a) ? a.slice(0, n) : []);
+  const out = {
+    name: String(s.name || 'Mundo').slice(0, 60), description: String(s.description || '').slice(0, 500), seed: wNum(s.seed, 0, 1e6, 7) | 0,
+    bounds: b, cell: wNum(s.cell, 3, 8, 4), default_biome: W_BIOMES.includes(s.default_biome) ? s.default_biome : 'plains',
+    land: arr(s.land, 12).map((l) => ({ x: X(l.x), y: Y(l.y), r: wNum(l.r, 10, 600, 120) })),
+    regions: arr(s.regions).filter((r) => W_BIOMES.includes(r.biome)).map((r) => ({ biome: r.biome, x: X(r.x), y: Y(r.y), r: wNum(r.r, 5, 400, 60) })),
+    ridges: arr(s.ridges, 10).map((r) => ({ from: [X(r.from?.[0]), Y(r.from?.[1])], to: [X(r.to?.[0]), Y(r.to?.[1])], w: wNum(r.w, 10, 200, 50), h: wNum(r.h, 5, 140, 60) })),
+    mountains: arr(s.mountains, 20).map((m) => ({ x: X(m.x), y: Y(m.y), r: wNum(m.r, 10, 200, 50), h: wNum(m.h, 5, 140, 60) })),
+    mesas: arr(s.mesas, 12).map((m) => ({ x: X(m.x), y: Y(m.y), r: wNum(m.r, 8, 60, 24), h: wNum(m.h, 6, 70, 30) })),
+    hills: arr(s.hills, 20).map((m) => ({ x: X(m.x), y: Y(m.y), r: wNum(m.r, 8, 160, 50), h: wNum(m.h, 2, 40, 12) })),
+    volcanoes: arr(s.volcanoes, 4).map((m) => ({ x: X(m.x), y: Y(m.y), r: wNum(m.r, 20, 160, 55), h: wNum(m.h, 20, 160, 75), snowcap: !!m.snowcap, dormant: !!m.dormant, green: !!m.green })),
+    land_polygons: arr(s.land_polygons, 12).map((p) => pts(p).slice(0, 80)).filter((p) => p.length > 2),
+    sea_polygons: arr(s.sea_polygons, 8).map((p) => pts(p).slice(0, 60)).filter((p) => p.length > 2),
+    lakes: arr(s.lakes, 10).map((l) => ({ x: X(l.x), y: Y(l.y), r: wNum(l.r, 6, 120, 30), frozen: !!l.frozen })),
+    rivers: arr(s.rivers, 8).map((r) => ({ points: pts(r.points), w: wNum(r.w, 2, 14, 5) })).filter((r) => r.points.length > 1),
+    roads: arr(s.roads, 14).map((r) => ({ points: pts(r.points) })).filter((r) => r.points.length > 1),
+    gorges: arr(s.gorges, 4).map((g) => ({ from: [X(g.from?.[0]), Y(g.from?.[1])], to: [X(g.to?.[0]), Y(g.to?.[1])], w: wNum(g.w, 10, 60, 24), floor: wNum(g.floor, 0, 40, 6) })),
+    landmarks: arr(s.landmarks, 30).filter((l) => W_COMPOSITES.includes(l.type) || W_MODULES.includes(l.type) || l.type === 'pyramid')
+      .map((l) => { const o = { type: l.type, x: X(l.x), y: Y(l.y), rot: wNum(l.rot, -360, 360, 0), scale: wNum(l.scale, 0.4, 2.5, 1) }; if (l.z !== undefined) o.z = wNum(l.z, -5, 200, 0); return o; }),
+    scatter: arr(s.scatter, 20).map((c) => ({ modules: (Array.isArray(c.modules) ? c.modules : []).filter((m) => W_MODULES.includes(m)).slice(0, 6), x: X(c.x), y: Y(c.y), r: wNum(c.r, 5, 400, 40), count: wNum(c.count, 1, 300, 30) | 0, scale: [wNum(c.scale?.[0], 0.3, 3, 0.8), wNum(c.scale?.[1], 0.3, 3, 1.3)] }))
+      .filter((c) => c.modules.length),
+    floating_isles: arr(s.floating_isles, 6).map((i) => ({ x: X(i.x), y: Y(i.y), z: wNum(i.z, 60, 160, 100), scale: wNum(i.scale, 0.4, 1.6, 1) })),
+    clouds: wNum(s.clouds, 0, 24, 12) | 0,
+    sun: { elev: wNum(s.sun?.elev, 3, 85, 32), az: wNum(s.sun?.az, -360, 360, -40), energy: wNum(s.sun?.energy, 0.3, 8, 4.5),
+      color: Array.isArray(s.sun?.color) ? s.sun.color.slice(0, 3).map((c) => wNum(c, 0, 1, 1)) : [1.0, 0.86, 0.68] },
+    exposure: wNum(s.exposure, -3, 1, -0.85),
+  };
+  if (!out.land.length) out.land = [{ x: 0, y: 0, r: 260 }];
+  return out;
+}
+async function listWorldTemplates() {
+  const out = [];
+  try { for (const f of await fsp.readdir(WORLD_TEMPLATES_DIR)) if (f.endsWith('.json')) { const j = JSON.parse(await fsp.readFile(path.join(WORLD_TEMPLATES_DIR, f), 'utf8')); out.push({ id: f.replace(/\.json$/, ''), name: j.name, description: j.description }); } } catch {}
+  return out;
+}
+function runWorldgen(bin, args, log) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(bin, ['-b', '--factory-startup', '-P', WORLDGEN, '--', ...args], { windowsHide: true, cwd: WORLD_DIR });
+    let carry = ''; const tail = [];
+    const onData = (chunk) => {
+      const lines = (carry + chunk).split(/\r?\n/); carry = lines.pop();
+      for (const l of lines) { if (l.startsWith('WORLD:')) log('Blender · ' + l.slice(6).trim()); else if (l.trim()) { tail.push(l.trim()); if (tail.length > 8) tail.shift(); } }
+    };
+    p.stdout.on('data', onData); p.stderr.on('data', onData);
+    const to = setTimeout(() => p.kill(), 60 * 60e3);
+    p.on('error', (e) => { clearTimeout(to); reject(new Error('No se pudo lanzar Blender: ' + e.message)); });
+    p.on('close', (code) => { clearTimeout(to); code === 0 ? resolve() : reject(new Error(`Blender terminó con código ${code}: ${short(tail.filter((t) => /Error|Traceback|line/.test(t)).join(' | ') || tail.join(' | '), 400)}`)); });
+  });
+}
+async function designWorld(cfg, messages, log) {
+  log(`Diseñando el mundo con ${cfg.llmProvider === 'local' ? llmLabel(cfg) : cfg.codeModel}…`);
+  const r = await chatStream(cfg, messages, cfg.codeModel, 12000, (n) => log(`… ${n} líneas de receta`));
+  const t = r.text.replace(/```(?:json)?/g, '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('El diseñador no devolvió una receta JSON. Prueba otro modelo de código.');
+  let spec;
+  try { spec = JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error('Receta JSON inválida: ' + e.message); }
+  messages.push({ role: 'assistant', content: JSON.stringify(spec) });
+  return sanitizeWorld(spec);
+}
+async function runWorld(cfg, job, o, log, quality, project) {
+  const b = await detectBlender(cfg);
+  if (!b.path) throw new Error('El diseñador de mundos necesita Blender (gratis en blender.org).');
+  const prompt = String(o.prompt || '').trim();
+  let base = null;
+  if (o.template) {
+    try { base = JSON.parse(await fsp.readFile(path.join(WORLD_TEMPLATES_DIR, String(o.template).replace(/[^\w-]/g, '') + '.json'), 'utf8')); } catch {}
+  }
+  if (o.worldId) {
+    const a = await findAsset(cfg, o.worldId);
+    if (a && a.files.includes('world.json')) base = JSON.parse(await fsp.readFile(path.join(a.dir, 'world.json'), 'utf8'));
+  }
+  if (!prompt && !base && !o.spec) throw new Error('Describe el mundo o elige una plantilla.');
+  let example = null;
+  try { example = await fsp.readFile(path.join(WORLD_TEMPLATES_DIR, 'aethermoor.json'), 'utf8'); } catch {}
+  const messages = [{ role: 'system', content: WORLD_SYS }];
+  if (base) messages.push({ role: 'user', content: `Current world recipe:\n${JSON.stringify(base)}\n\nModify it as requested (the request may be in Spanish) and return the FULL new recipe. Keep everything that is not affected by the request.\nRequest: ${prompt || 'improve it: more coherent geography, richer coastline, better landmark placement and more magic'}` });
+  else messages.push({ role: 'user', content: (example ? `Example recipe (for format and quality reference only, do not copy its layout):\n${example}\n\n` : '') + `Design a NEW world (request may be in Spanish): ${prompt}` });
+  let spec = o.spec ? sanitizeWorld(typeof o.spec === 'string' ? JSON.parse(o.spec) : o.spec) : base && !prompt ? sanitizeWorld(base) : await designWorld(cfg, messages, log);
+  if (o.spec) log('Receta editada a mano: construyo sin LLM.');
+  const id = Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+  const name = slugName(spec.name || prompt || 'mundo');
+  const dir = path.join(cfg.libraryPath, project, '3d', `${name}_${id}`);
+  await fsp.mkdir(dir, { recursive: true });
+  const render = async (tag, res, samples) => {
+    const specF = path.join(dir, 'world.json');
+    await fsp.writeFile(specF, JSON.stringify(spec, null, 2));
+    log(`Construyendo “${spec.name}” en Blender (${res}, ${samples} muestras)…`);
+    await runWorldgen(b.path, ['--spec', specF, '--res', res, '--samples', String(samples), '--out', path.join(dir, tag + '.png')], log);
+  };
+  const reviews = o.spec ? 0 : clampInt(o.reviews, 0, 2, quality === 'draft' ? 0 : 1);
+  for (let r = 0; r < reviews; r++) {
+    await render('preview_v' + (r + 1), '960x540', 10);
+    const critique = await reviewRender(cfg, path.join(dir, `preview_v${r + 1}.png`), `JRPG overworld map. Request: ${prompt}. Recipe summary: ${spec.description}`, log);
+    if (!critique) break;
+    log(`Director de arte: ${short(critique.replace(/\s+/g, ' '), 260)}`);
+    messages.push({ role: 'user', content: `Art director review of the rendered map:\n${critique}\nImprove the recipe accordingly (geography, coastline, landmark placement, biome contrast, magic, mood). Return the FULL recipe.` });
+    try { spec = await designWorld(cfg, messages, log); } catch (e) { log(`⚠ Mejora no aplicada (${short(e.message, 120)}).`); break; }
+  }
+  const res = quality === 'high' ? '1920x1080' : quality === 'draft' ? '960x540' : '1600x900';
+  const samples = quality === 'high' ? 64 : quality === 'draft' ? 12 : 32;
+  await render('world', res, samples);
+  for (let k = 0; k < Math.min(3, spec.landmarks.length) && quality !== 'draft'; k++) {
+    const specF = path.join(dir, 'world.json');
+    log(`Plano de detalle ${k + 1}: ${spec.landmarks[k].type}`);
+    await runWorldgen(b.path, ['--spec', specF, '--shot', `lm${k}`, '--res', '1280x720', '--samples', '24', '--out', path.join(dir, `zone_${k + 1}_${spec.landmarks[k].type}.png`)], log).catch((e) => log('⚠ ' + short(e.message, 120)));
+  }
+  await fsp.copyFile(path.join(dir, 'world.png'), path.join(dir, 'thumb.png')).catch(() => {});
+  const meta = { id, name, project, kind: '3d', category: 'world', style: 'cube2dhd', prompt, imagePrompt: spec.description, tags: ['world', 'jrpg', 'blender'], seed: spec.seed, quality, model: `${codeModelLabel(cfg)} + Blender ${b.version}`, worldName: spec.name, template: o.template || null, parent: o.worldId || null, createdAt: new Date().toISOString() };
+  await fsp.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2));
+  job.assets.push(await readAsset(cfg, dir));
+  log(`✔ Mundo “${spec.name}” guardado (receta world.json reutilizable, render y planos de zona)`);
+  job.status = 'done';
+}
+const codeModelLabel = (cfg) => (cfg.llmProvider === 'local' ? llmLabel(cfg) : cfg.codeModel);
+
 // ───────────────────────── Trabajos principales ─────────────────────────
 async function runJob(job, o) {
   const cfg = loadConfig();
@@ -820,6 +966,7 @@ async function runJob(job, o) {
     if (o.action === 'animate') return await runAnimate(cfg, job, o, log, quality, project);
     if (o.action === 'blender-process' || o.action === 'blender-render') return await runBlenderJob(cfg, job, o, log);
     if (o.action === 'game') return await runGame(cfg, job, o, log, project);
+    if (o.action === 'world') return await runWorld(cfg, job, o, log, quality, project);
     if (o.category === '3d-blender') return await runBuild3D(cfg, job, o, log, quality, project);
 
     const category = TYPES[o.category] ? o.category : '2d-item';
@@ -1042,6 +1189,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') return send(res, 200, await saveProject(cfg, name, await readBody(req)));
       return send(res, 200, await loadProject(cfg, name));
     }
+    if (p === '/api/world-templates') return send(res, 200, await listWorldTemplates());
     if (p === '/api/games') {
       const cfg = loadConfig(); return send(res, 200, await listGames(cfg, safeName(u.searchParams.get('project') || cfg.project) || 'MiJuego'));
     }

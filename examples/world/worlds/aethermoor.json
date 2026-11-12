@@ -1,0 +1,50 @@
+{
+  "name": "Aethermoor",
+  "description": "Continente de alta fantasía: cordillera con fortaleza en el abismo, lago helado, bosque con el Árbol del Mundo, llanuras con aldea, desierto con pirámide y castillo junto al mar.",
+  "seed": 7,
+  "bounds": [-320, 320, -240, 240],
+  "cell": 4,
+  "land": [{"x": 0, "y": 30, "r": 300}, {"x": -150, "y": -60, "r": 170}, {"x": 160, "y": -40, "r": 190}, {"x": 0, "y": -110, "r": 150}],
+  "default_biome": "plains",
+  "regions": [
+    {"biome": "desert", "x": 230, "y": -10, "r": 120},
+    {"biome": "snow", "x": -190, "y": 140, "r": 100},
+    {"biome": "forest", "x": -105, "y": 30, "r": 62},
+    {"biome": "farmland", "x": 70, "y": -100, "r": 50}
+  ],
+  "ridges": [{"from": [-320, 215], "to": [320, 205], "w": 110, "h": 90}],
+  "mesas": [{"x": 170, "y": 70, "h": 34, "r": 26}, {"x": 285, "y": 55, "h": 42, "r": 26}, {"x": 190, "y": -130, "h": 28, "r": 22}],
+  "hills": [{"x": -205, "y": -55, "r": 60, "h": 16}],
+  "lakes": [{"x": -175, "y": 140, "r": 50, "frozen": true}],
+  "gorges": [{"from": [20, 95], "to": [20, 200], "w": 26, "floor": 6}],
+  "rivers": [{"points": [[14, 92], [-6, 50], [-30, 0], [-20, -60], [5, -120], [10, -200]], "w": 5}],
+  "roads": [
+    {"points": [[-205, -55], [-150, -70], [-60, -85], [55, -95]]},
+    {"points": [[55, -95], [40, -30], [26, 40], [26, 90]]},
+    {"points": [[55, -95], [130, -60], [190, 5]]}
+  ],
+  "landmarks": [
+    {"type": "fortress", "x": 20, "y": 100, "rot": 0, "scale": 1.0},
+    {"type": "waterfall", "x": 14, "y": 176, "z": 6},
+    {"type": "castle", "x": -205, "y": -55},
+    {"type": "village", "x": 55, "y": -95},
+    {"type": "port", "x": -250, "y": -150, "rot": 200},
+    {"type": "world_tree", "x": -105, "y": 25},
+    {"type": "oasis", "x": 205, "y": 15},
+    {"type": "pyramid", "x": 250, "y": -70},
+    {"type": "cave", "x": -40, "y": 112, "z": 6},
+    {"type": "cave", "x": 170, "y": 115, "z": 6, "scale": 1.2},
+    {"type": "ruins", "x": 235, "y": 30},
+    {"type": "bridge", "x": -24, "y": -40, "rot": 80}
+  ],
+  "scatter": [
+    {"modules": ["tree0", "tree1", "tree2"], "x": -105, "y": 30, "r": 70, "count": 240, "scale": [0.8, 1.4]},
+    {"modules": ["tree0", "tree2"], "x": -40, "y": -60, "r": 180, "count": 60, "scale": [0.8, 1.2]},
+    {"modules": ["pine"], "x": -185, "y": 140, "r": 110, "count": 120, "scale": [0.9, 1.6]},
+    {"modules": ["ice_spike"], "x": -175, "y": 140, "r": 40, "count": 9, "scale": [0.6, 1.5]},
+    {"modules": ["crystal_teal", "crystal_violet"], "x": 0, "y": -20, "r": 260, "count": 8, "scale": [1.2, 1.5]}
+  ],
+  "floating_isles": [{"x": -30, "y": -40, "z": 95}, {"x": 95, "y": 10, "z": 110, "scale": 0.8}, {"x": -150, "y": -120, "z": 100, "scale": 0.7}],
+  "clouds": 14,
+  "sun": {"elev": 32, "az": -40, "energy": 4.5, "color": [1.0, 0.86, 0.68]}
+}

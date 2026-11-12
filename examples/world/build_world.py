@@ -594,4 +594,5 @@ def main():
         log("Render → " + W["out"])
 
 
-main()
+if __name__ == "__main__":
+    main()
