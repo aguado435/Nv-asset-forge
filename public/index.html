@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NV Asset Forge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+:root{
+  --bg:#0c0e11; --panel:#14171c; --panel2:#1a1e24; --line:#262b33; --line2:#323843;
+  --text:#e7eaef; --muted:#8b93a1; --dim:#5f6774;
+  --acc:#8fd14f; --acc2:#6fb52f; --accbg:rgba(143,209,79,.12);
+  --warn:#f0b44c; --err:#f06a5c; --ok:#8fd14f;
+  --r:10px; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--acc)}
+.app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+header{display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.logo i{width:22px;height:22px;border-radius:6px;background:conic-gradient(from 210deg,var(--acc),#3d6b14,var(--acc));display:inline-block}
+.logo small{color:var(--muted);font-weight:500}
+.spacer{flex:1}
+.pill{display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:99px;color:var(--muted);font-size:12.5px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--err)}
+.dot.ok{background:var(--ok)}
+.proj{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
+.proj input{width:140px}
+main{display:grid;grid-template-columns:360px 1fr 300px;min-height:0}
+aside,section{min-height:0}
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:16px}
+.panel.right{border-right:0;border-left:1px solid var(--line);display:flex;flex-direction:column;padding:0}
+h3{font-size:11.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);margin:18px 0 8px;font-weight:600}
+h3:first-child{margin-top:0}
+label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 5px}
+input[type=text],input[type=number],input[type=password],select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--acc2)}
+textarea{resize:vertical;min-height:84px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.hint{font-size:12px;color:var(--dim);margin-top:5px}
+.chk{display:flex;gap:8px;align-items:center;margin:12px 0 0;color:var(--text);font-size:13px;cursor:pointer}
+.chk input{accent-color:var(--acc)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line2);background:var(--panel2);border-radius:8px;padding:7px 12px;cursor:pointer;white-space:nowrap;font-size:13px}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#0c1404;font-weight:600}
+.btn.pri:hover{background:#a3e264}
+.btn.big{width:100%;padding:11px;font-size:14.5px;margin-top:14px}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn.danger:hover{border-color:var(--err);color:var(--err)}
+.plan{margin-top:10px;border:1px dashed var(--line2);border-radius:var(--r);padding:10px;display:none}
+.plan.show{display:block}
+.plan textarea{min-height:110px;font-family:var(--mono);font-size:12px}
+.plan .src{font-size:11.5px;color:var(--dim)}
+.log{margin-top:14px;background:#090b0d;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:12px/1.55 var(--mono);color:#aeb6c2;max-height:210px;overflow:auto;white-space:pre-wrap;display:none}
+.log.show{display:block}
+.log .e{color:var(--err)} .log .w{color:var(--warn)} .log .k{color:var(--ok)}
+/* Stage */
+.center{display:grid;grid-template-rows:auto 1fr auto;min-height:0;background:var(--bg)}
+.ahead{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);min-height:52px;flex-wrap:wrap}
+.ahead .nm{font-weight:600;font-size:15px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:11.5px var(--mono);padding:2px 7px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.chip.a{color:var(--acc);border-color:rgba(143,209,79,.35);background:var(--accbg)}
+.stage{position:relative;min-height:0;overflow:hidden}
+.checker{background-color:#1b1f25;background-image:linear-gradient(45deg,#232830 25%,transparent 25%),linear-gradient(-45deg,#232830 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#232830 75%),linear-gradient(-45deg,transparent 75%,#232830 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+#v2d,#v3d,#empty,#tile{position:absolute;inset:0;display:none}
+#v2d{align-items:center;justify-content:center;padding:24px}
+#v2d canvas{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 0 0 1px var(--line2)}
+#v2d.pix canvas{image-rendering:pixelated}
+#tile{background-repeat:repeat}
+#v3d canvas{display:block;width:100%!important;height:100%!important}
+#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:30px}
+#empty b{color:var(--text);font-size:18px;margin-bottom:6px}
+.stats{position:absolute;left:12px;bottom:12px;font:11.5px var(--mono);color:var(--muted);background:rgba(12,14,17,.75);border:1px solid var(--line);padding:5px 8px;border-radius:6px;display:none}
+.busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(12,14,17,.55);backdrop-filter:blur(2px);z-index:5;flex-direction:column;gap:12px;color:var(--muted)}
+.busy.show{display:flex}
+.spin{width:34px;height:34px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--acc);animation:sp 0.9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tools{border-top:1px solid var(--line);background:var(--panel);padding:10px 14px;display:none;gap:8px;flex-wrap:wrap;align-items:center}
+.tools.show{display:flex}
+.tg{display:flex;gap:6px;align-items:center;padding-right:10px;margin-right:2px;border-right:1px solid var(--line)}
+.tg:last-child{border-right:0}
+.tg span{font-size:11.5px;color:var(--dim)}
+.tools input[type=number]{width:64px;padding:5px 7px}
+.tools input[type=text]{width:220px;padding:5px 8px}
+.tools select{width:auto;padding:5px 7px}
+.tools input[type=range]{width:80px;accent-color:var(--acc)}
+.files{display:flex;gap:6px;flex-wrap:wrap}
+.files a,.files button{font:11.5px var(--mono);padding:3px 8px;border-radius:5px;border:1px solid var(--line);color:var(--muted);background:var(--panel2);text-decoration:none;cursor:pointer}
+.files .cur{color:var(--acc);border-color:rgba(143,209,79,.4)}
+/* Library */
+.libh{padding:14px 14px 10px;border-bottom:1px solid var(--line)}
+.libh .row{grid-template-columns:1fr auto;margin-top:8px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 10px;font-size:12px;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--panel2);color:var(--text)}
+.grid{flex:1;overflow:auto;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start}
+.card{border:1px solid var(--line);border-radius:9px;overflow:hidden;cursor:pointer;background:var(--panel2);position:relative}
+.card:hover{border-color:var(--line2)}
+.card.sel{border-color:var(--acc)}
+.card .th{aspect-ratio:1;display:flex;align-items:center;justify-content:center}
+.card img{width:100%;height:100%;object-fit:contain}
+.card .ph{font:600 22px var(--mono);color:var(--dim)}
+.card .cap{padding:6px 8px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .k{position:absolute;top:6px;left:6px;font:600 10px var(--mono);background:rgba(12,14,17,.8);padding:2px 5px;border-radius:4px;color:var(--acc)}
+.libempty{grid-column:1/-1;color:var(--dim);font-size:13px;text-align:center;padding:30px 10px}
+.libf{padding:10px 14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.libf code{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal.show{display:flex}
+.box{background:var(--panel);border:1px solid var(--line2);border-radius:14px;width:min(620px,100%);max-height:90vh;overflow:auto;padding:22px}
+.box h2{margin:0 0 4px;font-size:18px}
+.box p{color:var(--muted);margin:0 0 6px;font-size:13px}
+.box .act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.sep{height:1px;background:var(--line);margin:16px 0}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);padding:9px 14px;border-radius:9px;z-index:60;display:none;max-width:80vw}
+.toast.show{display:block}
+.toast.err{border-color:var(--err)}
+@media (max-width:1100px){main{grid-template-columns:320px 1fr}.panel.right{display:none}}
+@media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:auto 70vh}.app{height:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo"><i></i>NV Asset Forge <small>2D · 3D game assets</small></div>
+  <div class="spacer"></div>
+  <div class="proj">Proyecto <input type="text" id="project" placeholder="MiJuego"></div>
+  <div class="pill" id="keyPill"><span class="dot" id="keyDot"></span><span id="keyTxt">Sin API key</span></div>
+  <button class="btn ghost" id="openLib" title="Abrir la carpeta de la biblioteca">📁 Carpeta</button>
+  <button class="btn" id="openSettings">⚙ Ajustes</button>
+</header>
+<main>
+  <!-- Generador -->
+  <aside class="panel">
+    <h3>Nuevo asset</h3>
+    <label for="prompt">Describe lo que necesitas (en español vale)</label>
+    <textarea id="prompt" placeholder="Ej.: caballero orco con hacha a dos manos y armadura de cuero oxidada"></textarea>
+    <label for="category">Tipo de asset</label>
+    <select id="category"></select>
+    <div class="hint" id="catHint"></div>
+    <div class="row">
+      <div><label for="style">Estilo</label><select id="style"></select></div>
+      <div id="sizeWrap"><label for="size">Tamaño</label>
+        <select id="size"><option>1024x1024</option><option>832x1216</option><option>1216x832</option><option>768x1344</option><option>1344x768</option></select></div>
+    </div>
+    <div class="row3">
+      <div><label for="quality">Calidad</label><select id="quality"><option value="draft">Borrador</option><option value="normal" selected>Normal</option><option value="high">Alta</option></select></div>
+      <div><label for="variants">Variantes</label><select id="variants"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div><label for="seed">Semilla</label><input type="number" id="seed" placeholder="aleatoria"></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="enhance" checked> Optimizar prompt con LLM de NVIDIA</label>
+    <button class="btn" id="btnPlan" style="margin-top:10px;width:100%">Ver / editar prompt optimizado</button>
+    <div class="plan" id="plan">
+      <div class="src" id="planSrc"></div>
+      <label for="planImg">Prompt de imagen (FLUX)</label>
+      <textarea id="planImg"></textarea>
+      <label for="planTrellis">Prompt 3D (TRELLIS, máx. 77)</label>
+      <input type="text" id="planTrellis" maxlength="77">
+      <label for="planName">Nombre del asset</label>
+      <input type="text" id="planName">
+      <div class="hint">Si generas ahora se usará este prompt tal cual. Cambia la descripción para descartarlo.</div>
+    </div>
+    <button class="btn pri big" id="btnGen">Generar asset</button>
+    <div class="log" id="log"></div>
+  </aside>
+
+  <!-- Visor / render local -->
+  <section class="center">
+    <div class="ahead" id="ahead">
+      <span class="nm" id="aName">Sin asset seleccionado</span>
+      <div class="chips" id="aChips"></div>
+      <div class="spacer"></div>
+      <div class="files" id="aFiles"></div>
+    </div>
+    <div class="stage checker" id="stage">
+      <div id="empty"><b>Crea tu primer asset</b>Describe el asset a la izquierda y pulsa Generar.<br>Todo se guarda en tu PC y puedes procesarlo aquí sin gastar créditos.</div>
+      <div id="v2d"><canvas id="c2d"></canvas></div>
+      <div id="tile"></div>
+      <div id="v3d"></div>
+      <div class="stats" id="stats"></div>
+      <div class="busy" id="busy"><div class="spin"></div><div id="busyTxt">Trabajando…</div></div>
+    </div>
+    <!-- Herramientas 2D (locales) -->
+    <div class="tools" id="tools2d">
+      <div class="tg"><span>Fondo</span><input type="range" id="tol" min="5" max="120" value="38" title="Tolerancia"><button class="btn sm" id="tRemove">Quitar fondo</button><button class="btn sm" id="tCrop">Recortar</button></div>
+      <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><button class="btn sm" id="tPixel">Pixelar</button></div>
+      <div class="tg"><span>Tile</span><button class="btn sm" id="tSeam">Hacer tileable</button><button class="btn sm" id="tTile">Ver mosaico</button></div>
+      <div class="tg"><span>Tamaño</span><select id="potSel"><option value="0">POT auto</option><option>2048</option><option>1024</option><option>512</option><option>256</option><option>128</option><option>64</option><option>32</option></select><button class="btn sm" id="tResize">Redimensionar</button></div>
+      <div class="tg"><button class="btn sm" id="tUndo">↶ Deshacer</button><button class="btn sm pri" id="tSave">Guardar versión</button><button class="btn sm" id="tDl">⬇ PNG</button></div>
+      <div class="tg"><span>IA</span><input type="text" id="editTxt" placeholder="Variación: ahora corriendo, vista lateral…"><button class="btn sm" id="tEdit">Variación</button><button class="btn sm" id="tTo3d">→ 3D</button></div>
+    </div>
+    <!-- Herramientas 3D (render local) -->
+    <div class="tools" id="tools3d">
+      <div class="tg"><button class="btn sm" id="rRot">⟳ Rotar</button><button class="btn sm" id="rWire">Wireframe</button><button class="btn sm" id="rGrid">Rejilla</button><button class="btn sm" id="rBg">Fondo</button></div>
+      <div class="tg"><span>Luz</span><input type="range" id="rLight" min="0" max="300" value="100"></div>
+      <div class="tg"><span>Sprite sheet</span><select id="ssDirs"><option value="4">4 dir</option><option value="8" selected>8 dir</option><option value="16">16 dir</option></select><select id="ssSize"><option>128</option><option selected>256</option><option>512</option></select><input type="number" id="ssElev" value="30" min="0" max="90" title="Elevación de cámara (º)"><button class="btn sm pri" id="rSheet">Renderizar</button></div>
+      <div class="tg"><button class="btn sm" id="rShot">Render HD PNG</button><button class="btn sm" id="rThumb">Miniatura</button><button class="btn sm" id="rCopy">⬇ GLB</button></div>
+    </div>
+  </section>
+
+  <!-- Biblioteca -->
+  <aside class="panel right">
+    <div class="libh">
+      <h3 style="margin:0">Biblioteca</h3>
+      <div class="row"><input type="text" id="q" placeholder="Buscar nombre o tag…"><div class="seg" id="kindSeg"><button data-k="" class="on">Todo</button><button data-k="2d">2D</button><button data-k="3d">3D</button></div></div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="libf"><code id="libPath"></code><button class="btn sm danger" id="delBtn" disabled>Borrar</button></div>
+  </aside>
+</main>
+</div>
+
+<!-- Ajustes -->
+<div class="modal" id="settings">
+  <div class="box">
+    <h2>Ajustes</h2>
+    <p>Todo se guarda en <code>config.json</code> dentro de la carpeta de la app, solo en tu PC.</p>
+    <label for="sKey">API key de NVIDIA Build</label>
+    <input type="password" id="sKey" placeholder="nvapi-…">
+    <div class="hint">Gratis en <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a> → cualquier modelo → “Get API Key”.</div>
+    <div class="row">
+      <div><label for="sImg">Modelo de imagen</label><select id="sImg"></select></div>
+      <div><label for="sProv">LLM que optimiza los prompts</label><select id="sProv"><option value="nvidia">NVIDIA Build</option><option value="local">Local compatible OpenAI (FreeLLMAPI)</option></select></div>
+    </div>
+    <div id="provNv"><label for="sLlm">Modelo LLM de NVIDIA</label><input type="text" id="sLlm"></div>
+    <div id="provLocal">
+      <div class="row">
+        <div><label for="sLu">URL base</label><input type="text" id="sLu" placeholder="http://localhost:31415/v1"></div>
+        <div><label for="sLm">Modelo</label><input type="text" id="sLm" placeholder="auto"></div>
+      </div>
+      <label for="sLk">API key del router local (si la pide)</label><input type="password" id="sLk">
+      <div class="hint">Abre FreeLLMAPI, copia su URL y su clave. Si no responde, la app usa automáticamente el LLM de NVIDIA. Imagen y 3D siempre van con NVIDIA.</div>
+    </div>
+    <div class="sep"></div>
+    <p><b>Dónde se ejecutan los modelos.</b> “Nube” usa build.nvidia.com. “NIM local” usa un contenedor NVIDIA NIM en tu propio PC (GPU RTX con Docker/WSL); sin límites ni colas.</p>
+    <div class="row">
+      <div><label for="sB2">Imagen (FLUX)</label><select id="sB2"><option value="cloud">Nube NVIDIA</option><option value="local">NIM local</option></select></div>
+      <div><label for="sL2">URL NIM imagen</label><input type="text" id="sL2"></div>
+    </div>
+    <div class="row">
+      <div><label for="sB3">3D (TRELLIS)</label><select id="sB3"><option value="cloud">Nube NVIDIA</option><option value="local">NIM local</option></select></div>
+      <div><label for="sL3">URL NIM 3D</label><input type="text" id="sL3"></div>
+    </div>
+    <div class="sep"></div>
+    <label for="sLib">Carpeta de la biblioteca</label>
+    <input type="text" id="sLib">
+    <div class="hint">Recomendado: déjala en la app, o apúntala a la carpeta de arte de tu proyecto Unity/Godot, o a una carpeta de OneDrive/Dropbox/Google Drive para tener copia en la nube.</div>
+    <div class="act">
+      <span id="testRes" style="margin-right:auto;align-self:center;font-size:12.5px;color:var(--muted)"></span>
+      <button class="btn" id="sTest">Probar conexión</button>
+      <button class="btn" id="sClose">Cerrar</button>
+      <button class="btn pri" id="sSave">Guardar</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const api = async (url, opt = {}) => {
+  const r = await fetch(url, { ...opt, headers: { 'Content-Type': 'application/json', ...(opt.headers || {}) } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  return j;
+};
+const post = (url, body) => api(url, { method: 'POST', body: JSON.stringify(body || {}) });
+let toastT;
+function toast(msg, err) { const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (err ? ' err' : ''); clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', err ? 6000 : 2600); }
+function busy(on, txt) { $('#busy').classList.toggle('show', !!on); if (txt) $('#busyTxt').textContent = txt; }
+
+// ───────── Estado ─────────
+let CFG = null, ASSETS = [], CUR = null, CURFILE = null, KIND = '';
+const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem('nvf.' + k)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('nvf.' + k, JSON.stringify(v)); } catch {} } };
+
+async function loadConfig() {
+  CFG = await api('/api/config');
+  $('#keyDot').classList.toggle('ok', CFG.hasKey);
+  $('#keyTxt').textContent = CFG.hasKey ? 'NVIDIA conectado' : 'Sin API key';
+  $('#project').value = LS.get('project', CFG.project);
+  $('#libPath').textContent = CFG.libraryPath; $('#libPath').title = CFG.libraryPath;
+  if (!$('#category').options.length) {
+    const groups = {};
+    for (const [id, t] of Object.entries(CFG.types)) (groups[t.group] ||= []).push([id, t]);
+    for (const [g, list] of Object.entries(groups)) {
+      const og = document.createElement('optgroup'); og.label = g;
+      for (const [id, t] of list) og.append(new Option(t.label, id));
+      $('#category').append(og);
+    }
+    for (const [id, l] of Object.entries(CFG.styles)) $('#style').append(new Option(l, id));
+    for (const [k, l] of Object.entries(CFG.imageModels)) $('#sImg').append(new Option(l, k));
+    $('#category').value = LS.get('category', '2d-character');
+    $('#style').value = LS.get('style', 'auto');
+    onCategory();
+  }
+  if (!CFG.hasKey) openSettings();
+}
+function onCategory() {
+  const t = CFG.types[$('#category').value]; if (!t) return;
+  $('#catHint').textContent = t.hint;
+  $('#size').value = t.size;
+  $('#sizeWrap').style.visibility = t.kind === '3d' ? 'hidden' : 'visible';
+  LS.set('category', $('#category').value);
+}
+$('#category').onchange = () => { onCategory(); clearPlan(); };
+$('#style').onchange = () => { LS.set('style', $('#style').value); clearPlan(); };
+$('#project').onchange = () => LS.set('project', $('#project').value.trim());
+
+// ───────── Ajustes ─────────
+function openSettings() {
+  $('#sKey').value = CFG.apiKey; $('#sLlm').value = CFG.llmModel; $('#sProv').value = CFG.llmProvider; $('#sLu').value = CFG.llmLocalUrl; $('#sLm').value = CFG.llmLocalModel; $('#sLk').value = CFG.llmLocalKey; provToggle(); $('#sImg').value = CFG.imageModel;
+  $('#sB2').value = CFG.backend2d; $('#sB3').value = CFG.backend3d; $('#sL2').value = CFG.local2dUrl; $('#sL3').value = CFG.local3dUrl;
+  $('#sLib').value = CFG.libraryPath; $('#testRes').textContent = '';
+  $('#settings').classList.add('show');
+}
+async function saveSettings() {
+  await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value });
+  await loadConfig(); await loadLibrary();
+}
+function provToggle() { const l = $('#sProv').value === 'local'; $('#provLocal').style.display = l ? 'block' : 'none'; $('#provNv').style.display = l ? 'none' : 'block'; }
+$('#sProv').onchange = provToggle;
+$('#openSettings').onclick = openSettings;
+$('#sClose').onclick = () => $('#settings').classList.remove('show');
+$('#sSave').onclick = async () => { try { await saveSettings(); $('#settings').classList.remove('show'); toast('Ajustes guardados'); } catch (e) { toast(e.message, 1); } };
+$('#sTest').onclick = async () => {
+  $('#testRes').textContent = 'Probando…';
+  try {
+    await saveSettings(); const r = await post('/api/test');
+    const fmt = (n, v) => `<span style="color:var(${v === 'ok' ? '--ok' : '--err'})">${v === 'ok' ? '✔' : '✖'} ${n}${v === 'ok' ? '' : ': ' + v}</span>`;
+    $('#testRes').innerHTML = [r.local !== undefined ? fmt('LLM local', r.local) : '', fmt('NVIDIA', r.nvidia)].filter(Boolean).join(' · ');
+  }
+  catch (e) { $('#testRes').innerHTML = `<span style="color:var(--err)">✖ ${e.message}</span>`; }
+};
+$('#openLib').onclick = () => post('/api/open', CUR ? { id: CUR.id } : {}).catch((e) => toast(e.message, 1));
+
+// ───────── Prompt plan ─────────
+let PLAN_FOR = null;
+function clearPlan() { PLAN_FOR = null; $('#plan').classList.remove('show'); }
+$('#prompt').oninput = clearPlan;
+$('#btnPlan').onclick = async () => {
+  const prompt = $('#prompt').value.trim(); if (!prompt) return toast('Escribe primero qué asset quieres', 1);
+  $('#btnPlan').disabled = true; $('#btnPlan').textContent = 'Optimizando con NVIDIA…';
+  try {
+    const p = await post('/api/enhance', { prompt, category: $('#category').value, style: $('#style').value });
+    $('#planImg').value = p.image_prompt; $('#planTrellis').value = p.trellis_prompt; $('#planName').value = p.name;
+    $('#planSrc').textContent = p.warning ? `⚠ LLM no disponible (${p.warning}). Plantilla local.` : `Generado por ${p.source}`;
+    $('#plan').classList.add('show'); PLAN_FOR = prompt + '|' + $('#category').value + '|' + $('#style').value;
+  } catch (e) { toast(e.message, 1); }
+  $('#btnPlan').disabled = false; $('#btnPlan').textContent = 'Ver / editar prompt optimizado';
+};
+
+// ───────── Trabajos ─────────
+function renderLog(lines) {
+  const el = $('#log'); el.classList.add('show');
+  el.innerHTML = lines.map((l) => `<div class="${/✖/.test(l) ? 'e' : /⚠/.test(l) ? 'w' : /✔/.test(l) ? 'k' : ''}">${l.replace(/</g, '&lt;')}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+async function runJob(body, label) {
+  $('#btnGen').disabled = true; busy(true, label);
+  try {
+    const { jobId } = await post('/api/generate', { project: $('#project').value.trim(), ...body });
+    let j;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1200));
+      j = await api('/api/jobs/' + jobId);
+      renderLog(j.log);
+      if (j.log.length) $('#busyTxt').textContent = j.log[j.log.length - 1].replace(/^\S+\s+/, '');
+      if (j.status !== 'running') break;
+    }
+    await loadLibrary();
+    if (j.assets.length) openAsset(j.assets[0].id);
+    if (j.status === 'error') toast(j.error, 1); else toast(`${j.assets.length} asset(s) creado(s)`);
+  } catch (e) { toast(e.message, 1); }
+  busy(false); $('#btnGen').disabled = false;
+}
+$('#btnGen').onclick = () => {
+  const prompt = $('#prompt').value.trim(); if (!prompt) return toast('Describe el asset que quieres', 1);
+  if (!CFG.hasKey && (CFG.backend2d === 'cloud' || CFG.backend3d === 'cloud')) { openSettings(); return toast('Añade tu API key de NVIDIA', 1); }
+  const key = prompt + '|' + $('#category').value + '|' + $('#style').value;
+  const plan = PLAN_FOR === key ? { image_prompt: $('#planImg').value, trellis_prompt: $('#planTrellis').value, name: $('#planName').value } : null;
+  runJob({ prompt, category: $('#category').value, style: $('#style').value, size: $('#size').value, quality: $('#quality').value, variants: $('#variants').value, seed: $('#seed').value, enhance: $('#enhance').checked, plan }, 'Generando con NVIDIA…');
+};
+$('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('#btnGen').click(); });
+
+// ───────── Biblioteca ─────────
+async function loadLibrary() { ASSETS = await api('/api/assets'); renderGrid(); }
+function renderGrid() {
+  const q = $('#q').value.trim().toLowerCase();
+  const list = ASSETS.filter((a) => (!KIND || a.kind === KIND) && (!q || [a.name, a.prompt, a.project, ...(a.tags || [])].join(' ').toLowerCase().includes(q)));
+  const g = $('#grid'); g.innerHTML = '';
+  if (!list.length) { g.innerHTML = `<div class="libempty">${ASSETS.length ? 'Nada coincide con el filtro.' : 'Aún no hay assets.'}</div>`; return; }
+  for (const a of list) {
+    const thumb = a.files.includes('thumb.png') ? 'thumb.png' : a.kind === '2d' ? (a.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png') : a.files.includes('concept.png') ? 'concept.png' : null;
+    const c = document.createElement('div'); c.className = 'card' + (CUR && CUR.id === a.id ? ' sel' : '');
+    c.innerHTML = `<span class="k">${a.kind.toUpperCase()}</span><div class="th checker">${thumb ? `<img loading="lazy" src="${a.url}${thumb}?v=${a.files.length}">` : '<span class="ph">GLB</span>'}</div><div class="cap" title="${a.prompt || ''}">${a.name}</div>`;
+    c.onclick = () => openAsset(a.id);
+    g.append(c);
+  }
+}
+$('#q').oninput = renderGrid;
+$('#kindSeg').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; KIND = b.dataset.k; [...$('#kindSeg').children].forEach((x) => x.classList.toggle('on', x === b)); renderGrid(); };
+$('#delBtn').onclick = async () => {
+  if (!CUR || !confirm(`¿Mover “${CUR.name}” a la papelera de la biblioteca?`)) return;
+  await api('/api/assets/' + CUR.id, { method: 'DELETE' }); CUR = null; showView('empty'); setHeader(); await loadLibrary(); toast('Movido a _papelera');
+};
+
+// ───────── Cabecera del asset ─────────
+function setHeader() {
+  $('#delBtn').disabled = !CUR;
+  if (!CUR) { $('#aName').textContent = 'Sin asset seleccionado'; $('#aChips').innerHTML = ''; $('#aFiles').innerHTML = ''; return; }
+  $('#aName').textContent = CUR.name;
+  const ch = [[CUR.kind.toUpperCase(), 1], [CFG.types[CUR.category]?.label || CUR.category], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
+  $('#aChips').innerHTML = ch.map(([t, a]) => `<span class="chip ${a ? 'a' : ''}">${t}</span>`).join('');
+  $('#aChips').title = CUR.imagePrompt || CUR.prompt || '';
+  const f = $('#aFiles'); f.innerHTML = '';
+  for (const name of CUR.files) {
+    const viewable = /\.(png|jpg|webp|glb)$/i.test(name);
+    const b = document.createElement(viewable ? 'button' : 'a');
+    b.textContent = name; if (name === CURFILE) b.className = 'cur';
+    if (viewable) b.onclick = () => openFile(name); else { b.href = CUR.url + name; b.target = '_blank'; }
+    f.append(b);
+  }
+  const dl = document.createElement('a'); dl.textContent = '⬇'; dl.title = 'Descargar archivo actual'; dl.href = CUR.url + (CURFILE || ''); dl.download = CURFILE || ''; f.append(dl);
+}
+function showView(v) {
+  for (const id of ['empty', 'v2d', 'v3d', 'tile']) $('#' + id).style.display = 'none';
+  $('#' + v).style.display = v === 'v2d' || v === 'empty' ? 'flex' : 'block';
+  $('#tools2d').classList.toggle('show', v === 'v2d' || v === 'tile');
+  $('#tools3d').classList.toggle('show', v === 'v3d');
+  $('#stats').style.display = v === 'v3d' ? 'block' : 'none';
+}
+async function openAsset(id) {
+  CUR = await api('/api/assets/' + id);
+  const def = CUR.kind === '3d' ? 'model.glb' : (CUR.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png');
+  renderGrid();
+  await openFile(CUR.files.includes(def) ? def : CUR.files[0]);
+}
+async function openFile(name) {
+  CURFILE = name; setHeader();
+  if (/\.glb$/i.test(name)) await show3D(CUR.url + name);
+  else await show2D(CUR.url + name + '?t=' + Date.now());
+}
+
+// ───────── Editor 2D local ─────────
+const cv = $('#c2d'); const ctx = cv.getContext('2d', { willReadFrequently: true });
+let HIST = [];
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('No se pudo cargar la imagen')); i.src = src; }); }
+async function show2D(src) {
+  const img = await loadImg(src);
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight; ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0);
+  HIST = []; refresh2D(); showView('v2d');
+}
+function fit2D() { const st = $('#stage'), k = Math.min((st.clientWidth - 48) / cv.width, (st.clientHeight - 48) / cv.height); const sc = cv.width <= 512 ? Math.max(1, Math.floor(k)) : Math.min(1, k); cv.style.width = Math.round(cv.width * sc) + 'px'; cv.style.height = Math.round(cv.height * sc) + 'px'; }
+new ResizeObserver(() => fit2D()).observe(document.querySelector('#stage'));
+function refresh2D() { fit2D(); $('#v2d').classList.toggle('pix', cv.width <= 512); if ($('#tile').style.display === 'block') updateTile(); }
+function snapshot() { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; c.getContext('2d').drawImage(cv, 0, 0); HIST.push(c); if (HIST.length > 25) HIST.shift(); }
+function setFrom(c) { cv.width = c.width; cv.height = c.height; ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(c, 0, 0); refresh2D(); }
+function op(fn) { snapshot(); try { fn(); } catch (e) { HIST.pop(); toast(e.message, 1); } refresh2D(); }
+
+function cornerColor(d, w, h) {
+  const pts = []; const s = Math.max(2, Math.round(Math.min(w, h) * 0.01));
+  for (const [cx, cy] of [[0, 0], [w - s, 0], [0, h - s], [w - s, h - s]]) for (let y = cy; y < cy + s; y++) for (let x = cx; x < cx + s; x++) { const i = (y * w + x) * 4; pts.push([d[i], d[i + 1], d[i + 2]]); }
+  const med = (k) => pts.map((p) => p[k]).sort((a, b) => a - b)[pts.length >> 1];
+  return [med(0), med(1), med(2)];
+}
+function removeBg(tol) {
+  const w = cv.width, h = cv.height, id = ctx.getImageData(0, 0, w, h), d = id.data;
+  const bg = cornerColor(d, w, h);
+  const dist = (p) => { const i = p * 4; const r = d[i] - bg[0], g = d[i + 1] - bg[1], b = d[i + 2] - bg[2]; return Math.sqrt(r * r + g * g + b * b); };
+  const N = w * h, mark = new Uint8Array(N), st = new Int32Array(N); let sp = 0;
+  const push = (p) => { if (!mark[p] && d[p * 4 + 3] > 0 && dist(p) <= tol) { mark[p] = 1; st[sp++] = p; } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (sp) { const p = st[--sp], x = p % w; if (x > 0) push(p - 1); if (x < w - 1) push(p + 1); if (p >= w) push(p - w); if (p < N - w) push(p + w); }
+  // borde suave + descontaminación de color
+  for (let p = 0; p < N; p++) {
+    if (mark[p]) { d[p * 4 + 3] = 0; continue; }
+    const x = p % w;
+    const near = (x > 0 && mark[p - 1]) || (x < w - 1 && mark[p + 1]) || (p >= w && mark[p - w]) || (p < N - w && mark[p + w]);
+    if (!near) continue;
+    const dd = dist(p); if (dd > tol * 2.2) continue;
+    const a = Math.max(0.15, Math.min(1, (dd - tol) / (tol * 1.2)));
+    const i = p * 4;
+    for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, (d[i + k] - bg[k] * (1 - a)) / a));
+    d[i + 3] = Math.round(d[i + 3] * a);
+  }
+  ctx.putImageData(id, 0, 0);
+}
+function autoCrop(pad = 8) {
+  const w = cv.width, h = cv.height, d = ctx.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) throw new Error('La imagen no tiene transparencia: quita el fondo primero');
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+  const c = document.createElement('canvas'); c.width = x1 - x0 + 1; c.height = y1 - y0 + 1; c.getContext('2d').drawImage(cv, -x0, -y0); setFrom(c);
+}
+function kmeans(px, k) {
+  const n = px.length / 3; if (!n) return [];
+  const C = [];
+  C.push([px[0], px[1], px[2]]);
+  while (C.length < Math.min(k, n)) { // k-means++ aproximado
+    let best = -1, bi = 0;
+    for (let s = 0; s < 400; s++) { const i = Math.floor(Math.random() * n) * 3; let m = Infinity; for (const c of C) { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; m = Math.min(m, dr * dr + dg * dg + db * db); } if (m > best) { best = m; bi = i; } }
+    C.push([px[bi], px[bi + 1], px[bi + 2]]);
+  }
+  const asg = new Uint8Array(n);
+  for (let it = 0; it < 10; it++) {
+    const S = C.map(() => [0, 0, 0, 0]);
+    for (let j = 0; j < n; j++) { const i = j * 3; let m = Infinity, mi = 0; C.forEach((c, ci) => { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; mi = ci; } }); asg[j] = mi; const s = S[mi]; s[0] += px[i]; s[1] += px[i + 1]; s[2] += px[i + 2]; s[3]++; }
+    S.forEach((s, ci) => { if (s[3]) C[ci] = [s[0] / s[3], s[1] / s[3], s[2] / s[3]]; });
+  }
+  return C.map((c) => c.map(Math.round));
+}
+function pixelate(tw, colors) {
+  tw = Math.max(8, Math.min(512, tw | 0)); const th = Math.max(1, Math.round(cv.height * tw / cv.width));
+  // reducción por pasos para promediar bien
+  let src = cv;
+  while (src.width / 2 > tw) { const c = document.createElement('canvas'); c.width = Math.round(src.width / 2); c.height = Math.round(src.height / 2); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); src = c; }
+  const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th);
+  const id = x.getImageData(0, 0, tw, th), d = id.data, px = [];
+  for (let i = 0; i < d.length; i += 4) { d[i + 3] = d[i + 3] < 128 ? 0 : 255; if (d[i + 3]) px.push(d[i], d[i + 1], d[i + 2]); }
+  const pal = kmeans(px, colors);
+  for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; let m = Infinity, b = pal[0]; for (const p of pal) { const dr = d[i] - p[0], dg = d[i + 1] - p[1], db = d[i + 2] - p[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; b = p; } } d[i] = b[0]; d[i + 1] = b[1]; d[i + 2] = b[2]; }
+  x.putImageData(id, 0, 0); setFrom(c);
+}
+function makeSeamless() {
+  const w = cv.width, h = cv.height;
+  const off = document.createElement('canvas'); off.width = w; off.height = h; const o = off.getContext('2d');
+  const hw = w >> 1, hh = h >> 1;
+  o.drawImage(cv, -hw, -hh); o.drawImage(cv, w - hw, -hh); o.drawImage(cv, -hw, h - hh); o.drawImage(cv, w - hw, h - hh);
+  const A = ctx.getImageData(0, 0, w, h).data, B = o.getImageData(0, 0, w, h);
+  const bd = B.data, band = Math.round(Math.min(w, h) * 0.18);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = Math.abs(x - hw), dy = Math.abs(y - hh), dmin = Math.min(dx, dy);
+    if (dmin >= band) continue;
+    let t = 1 - dmin / band; t = t * t * (3 - 2 * t); // peso del original cerca de la costura central
+    const i = (y * w + x) * 4;
+    for (let k = 0; k < 4; k++) bd[i + k] = bd[i + k] * (1 - t) + A[i + k] * t;
+  }
+  o.putImageData(B, 0, 0); setFrom(off);
+}
+function resizePOT(target) {
+  const w = cv.width, h = cv.height;
+  const pot = (v) => 2 ** Math.round(Math.log2(v));
+  let tw, th;
+  if (target) { const s = target / Math.max(w, h); tw = Math.max(1, Math.round(w * s)); th = Math.max(1, Math.round(h * s)); if (Math.abs(w - h) < 2) th = tw = target; }
+  else { tw = Math.min(4096, pot(w)); th = Math.min(4096, pot(h)); }
+  const pix = $('#v2d').classList.contains('pix') && w <= 256;
+  let src = cv;
+  if (!pix) while (src.width / 2 > tw) { const c = document.createElement('canvas'); c.width = Math.round(src.width / 2); c.height = Math.round(src.height / 2); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); src = c; }
+  const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d'); x.imageSmoothingEnabled = !pix; x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th); setFrom(c);
+}
+function updateTile() { const url = cv.toDataURL(); const t = $('#tile'); t.style.backgroundImage = `url(${url})`; const s = Math.min(t.clientWidth, t.clientHeight) / 3; t.style.backgroundSize = `${s}px ${s * cv.height / cv.width}px`; t.style.imageRendering = cv.width <= 512 ? 'pixelated' : 'auto'; }
+$('#tRemove').onclick = () => op(() => removeBg(+$('#tol').value));
+$('#tCrop').onclick = () => op(() => autoCrop());
+$('#tPixel').onclick = () => op(() => pixelate(+$('#pxW').value, Math.max(2, Math.min(64, +$('#pxC').value || 16))));
+$('#tSeam').onclick = () => op(makeSeamless);
+$('#tResize').onclick = () => op(() => resizePOT(+$('#potSel').value));
+$('#tTile').onclick = () => { const on = $('#tile').style.display !== 'block'; if (on) { showView('tile'); updateTile(); $('#tTile').textContent = 'Ver imagen'; } else { showView('v2d'); $('#tTile').textContent = 'Ver mosaico'; } };
+$('#tUndo').onclick = () => { const c = HIST.pop(); if (c) setFrom(c); else toast('Nada que deshacer'); };
+$('#tDl').onclick = () => { const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = `${CUR?.name || 'asset'}_${cv.width}x${cv.height}.png`; a.click(); };
+$('#tSave').onclick = async () => {
+  if (!CUR) return;
+  const n = CUR.files.filter((f) => /^processed/.test(f)).length + 1;
+  const name = `processed_${String(n).padStart(2, '0')}_${cv.width}x${cv.height}.png`;
+  try { CUR = await post(`/api/assets/${CUR.id}/file`, { name, data: cv.toDataURL('image/png') }); CURFILE = name; setHeader(); await loadLibrary(); toast('Guardado ' + name); } catch (e) { toast(e.message, 1); }
+};
+$('#tEdit').onclick = () => {
+  const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
+  runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
+};
+$('#tTo3d').onclick = () => { if (!CUR) return; runJob({ action: 'to3d', assetId: CUR.id, file: CURFILE, quality: $('#quality').value }, 'Reconstruyendo en 3D con TRELLIS…'); };
+
+// ───────── Render 3D local (three.js) ─────────
+let T3 = null;
+async function init3D() {
+  if (T3) return T3;
+  const THREE = await import('three');
+  const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+  const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+  const { RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js');
+  const host = $('#v3d');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1;
+  host.append(renderer.domElement);
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 100); camera.position.set(2.6, 1.7, 3.6);
+  const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 0, 0);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x334455, 0.6); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(3, 5, 4); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xbfd8ff, 0.8); rim.position.set(-4, 2, -3); scene.add(rim);
+  const grid = new THREE.GridHelper(4, 20, 0x3a4250, 0x262b33); scene.add(grid);
+  const pivot = new THREE.Group(); scene.add(pivot);
+  const loader = new GLTFLoader();
+  const S = { THREE, renderer, scene, camera, controls, pivot, grid, loader, key, hemi, rim, rotate: true, wire: false, bgDark: true, radius: 1 };
+  const resize = () => { const w = host.clientWidth || 1, h = host.clientHeight || 1; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  new ResizeObserver(resize).observe(host); resize();
+  renderer.setAnimationLoop(() => { if (S.rotate) pivot.rotation.y += 0.006; controls.update(); renderer.render(scene, camera); });
+  T3 = S; return S;
+}
+async function show3D(url) {
+  showView('v3d'); busy(true, 'Cargando modelo…');
+  try {
+    const S = await init3D();
+    const gltf = await new Promise((res, rej) => S.loader.load(url, res, undefined, rej));
+    S.pivot.clear(); S.pivot.rotation.set(0, 0, 0);
+    const obj = gltf.scene; const { THREE } = S;
+    const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+    const scale = 1.6 / Math.max(size.x, size.y, size.z || 1);
+    obj.position.sub(center).multiplyScalar(1); const holder = new THREE.Group(); holder.add(obj); holder.scale.setScalar(scale); S.pivot.add(holder);
+    S.grid.position.y = -size.y * scale / 2;
+    S.radius = new THREE.Box3().setFromObject(holder).getBoundingSphere(new THREE.Sphere()).radius;
+    let tris = 0, verts = 0, mats = new Set();
+    obj.traverse((o) => { if (o.isMesh) { const g = o.geometry; verts += g.attributes.position.count; tris += g.index ? g.index.count / 3 : g.attributes.position.count / 3; [].concat(o.material).forEach((m) => { mats.add(m); m.wireframe = S.wire; }); } });
+    $('#stats').textContent = `${Math.round(tris).toLocaleString('es')} tris · ${verts.toLocaleString('es')} verts · ${mats.size} mat · ${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)} u`;
+    S.camera.position.set(2.6, 1.7, 3.6); S.controls.target.set(0, 0, 0);
+    if (!CUR.files.includes('thumb.png')) setTimeout(() => saveThumb(true), 400);
+  } catch (e) { toast('No se pudo abrir el GLB: ' + (e.message || e), 1); }
+  busy(false);
+}
+function renderTo(size, { elevDeg = 25, yaw = null, ortho = true } = {}) {
+  const S = T3, { THREE, renderer, scene } = S;
+  const prevGrid = S.grid.visible, prevBg = scene.background;
+  S.grid.visible = false; scene.background = null;
+  const r = S.radius * 1.04, e = elevDeg * Math.PI / 180, dist = r * 4;
+  const cam = ortho ? new THREE.OrthographicCamera(-r, r, r, -r, 0.01, dist * 3) : S.camera.clone();
+  if (ortho) { cam.position.set(0, Math.sin(e) * dist, Math.cos(e) * dist); cam.lookAt(0, 0, 0); }
+  const prevRot = S.pivot.rotation.y; if (yaw !== null) S.pivot.rotation.y = yaw;
+  const prevSize = renderer.getSize(new THREE.Vector2()), prevPR = renderer.getPixelRatio();
+  renderer.setPixelRatio(1); renderer.setSize(size, size, false);
+  if (!ortho) { cam.aspect = 1; cam.updateProjectionMatrix(); }
+  renderer.render(scene, cam);
+  const out = document.createElement('canvas'); out.width = size; out.height = size; out.getContext('2d').drawImage(renderer.domElement, 0, 0, size, size);
+  renderer.setPixelRatio(prevPR); renderer.setSize(prevSize.x, prevSize.y, false);
+  S.pivot.rotation.y = prevRot; S.grid.visible = prevGrid; scene.background = prevBg;
+  return out;
+}
+async function saveFile(name, canvas, silent) {
+  CUR = await post(`/api/assets/${CUR.id}/file`, { name, data: canvas.toDataURL('image/png') });
+  if (!silent) { setHeader(); toast('Guardado ' + name); }
+  await loadLibrary();
+}
+async function saveThumb(silent) { if (!T3 || !CUR) return; try { await saveFile('thumb.png', renderTo(512, { elevDeg: 22, yaw: -0.6 }), silent); if (!silent) setHeader(); } catch (e) { if (!silent) toast(e.message, 1); } }
+$('#rRot').onclick = () => { if (T3) T3.rotate = !T3.rotate; };
+$('#rWire').onclick = () => { if (!T3) return; T3.wire = !T3.wire; T3.pivot.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => m.wireframe = T3.wire); }); };
+$('#rGrid').onclick = () => { if (T3) T3.grid.visible = !T3.grid.visible; };
+$('#rBg').onclick = () => { if (!T3) return; T3.bgDark = !T3.bgDark; T3.scene.background = T3.bgDark ? null : new T3.THREE.Color(0xd9dde3); };
+$('#rLight').oninput = (e) => { if (!T3) return; const k = +e.target.value / 100; T3.key.intensity = 1.6 * k; T3.rim.intensity = 0.8 * k; T3.hemi.intensity = 0.6 * k; T3.renderer.toneMappingExposure = 0.6 + 0.4 * k; };
+$('#rShot').onclick = async () => { if (!T3 || !CUR) return; const c = renderTo(2048, { ortho: false }); await saveFile(`render_${Date.now().toString(36)}.png`, c); };
+$('#rThumb').onclick = () => saveThumb(false);
+$('#rCopy').onclick = () => { if (!CUR) return; const a = document.createElement('a'); a.href = CUR.url + 'model.glb'; a.download = CUR.name + '.glb'; a.click(); };
+$('#rSheet').onclick = async () => {
+  if (!T3 || !CUR) return;
+  const dirs = +$('#ssDirs').value, size = +$('#ssSize').value, elev = +$('#ssElev').value || 30;
+  const cols = Math.min(dirs, 8), rows = Math.ceil(dirs / cols);
+  const sheet = document.createElement('canvas'); sheet.width = cols * size; sheet.height = rows * size; const sx = sheet.getContext('2d');
+  busy(true, `Renderizando ${dirs} direcciones en local…`);
+  for (let i = 0; i < dirs; i++) { const c = renderTo(size, { elevDeg: elev, yaw: -i * Math.PI * 2 / dirs }); sx.drawImage(c, (i % cols) * size, Math.floor(i / cols) * size); await new Promise((r) => setTimeout(r, 0)); }
+  busy(false);
+  await saveFile(`spritesheet_${dirs}dir_${size}px_e${elev}.png`, sheet);
+};
+
+// ───────── Arranque ─────────
+showView('empty');
+await loadConfig().catch((e) => toast('No conecta con el servidor local: ' + e.message, 1));
+await loadLibrary().catch(() => {});
+</script>
+</body>
+</html>

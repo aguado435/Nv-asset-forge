@@ -1,0 +1,1 @@
+{ "name": "nv-asset-forge", "version": "1.0.0", "private": true, "description": "Generador local de assets 2D/3D para videojuegos con NVIDIA Build", "main": "server.js", "scripts": { "start": "node server.js" }, "engines": { "node": ">=18" } }
