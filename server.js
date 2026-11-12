@@ -80,6 +80,7 @@ function publicConfig(cfg) {
     imageModels: { ...Object.fromEntries(Object.entries(IMAGE_MODELS).map(([k, m]) => [k, m.label])), ...(cfg.customImagePath ? { custom: 'Personalizado: ' + cfg.customImagePath } : {}) },
     models3d: { ...Object.fromEntries(Object.entries(MODELS_3D).map(([k, m]) => [k, m.label])), ...(cfg.custom3dPath ? { custom: 'Personalizado: ' + cfg.custom3dPath } : {}) },
     llmSuggestions: LLM_SUGGESTIONS,
+    anims: Object.fromEntries(Object.entries(ANIMS).map(([k, a]) => [k, `${a.label} · ${a.frames.length} fot.`])),
     types: Object.fromEntries(Object.entries(TYPES).map(([id, t]) => [id, { label: t.label, kind: t.kind, group: t.group, size: t.size, hint: t.hint }])),
     styles: Object.fromEntries(Object.entries(STYLES).map(([id, s]) => [id, s.label])),
   };
@@ -385,6 +386,231 @@ function newJob() {
 }
 const clampInt = (v, lo, hi, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
 
+// ───────────────────────── Colecciones (estilo por proyecto) ─────────────────────────
+const projectFile = (cfg, project) => path.join(cfg.libraryPath, safeName(project) || 'MiJuego', 'project.json');
+async function loadProject(cfg, project) {
+  try { return JSON.parse(await fsp.readFile(projectFile(cfg, project), 'utf8')); } catch { return {}; }
+}
+async function saveProject(cfg, project, patch) {
+  const cur = await loadProject(cfg, project);
+  if (patch.bible !== undefined) cur.bible = String(patch.bible).slice(0, 1500);
+  if (patch.refAssetId !== undefined) cur.refAssetId = patch.refAssetId ? String(patch.refAssetId) : '';
+  if (patch.refFile !== undefined) cur.refFile = String(patch.refFile || '');
+  const f = projectFile(cfg, project);
+  await fsp.mkdir(path.dirname(f), { recursive: true });
+  await fsp.writeFile(f, JSON.stringify(cur, null, 2));
+  return cur;
+}
+async function referenceBuf(cfg, proj) {
+  if (!proj.refAssetId) return null;
+  const a = await findAsset(cfg, proj.refAssetId);
+  if (!a) return null;
+  const f = proj.refFile && a.files.includes(proj.refFile) ? proj.refFile : a.files.includes('source.png') ? 'source.png' : a.files.includes('concept.png') ? 'concept.png' : null;
+  return f ? fsp.readFile(path.join(a.dir, f)) : null;
+}
+
+// ───────────────────────── Animaciones 2D ─────────────────────────
+const ANIMS = {
+  idle: { label: 'Idle (respirar)', fps: 4, frames: ['standing in a relaxed neutral idle pose', 'idle pose breathing in: chest slightly raised, shoulders slightly lifted, arms slightly moved'] },
+  walk: { label: 'Andar', fps: 8, frames: ['walking, left leg forward touching the ground, right arm swinging forward', 'walking passing pose, legs together under the body, upright', 'walking, right leg forward touching the ground, left arm swinging forward', 'walking passing pose, legs together under the body, body slightly lower'] },
+  run: { label: 'Correr', fps: 10, frames: ['running, left knee raised high, right arm forward, leaning forward', 'running, both feet off the ground mid-stride, leaning forward', 'running, right knee raised high, left arm forward, leaning forward', 'running, landing on the left foot, leaning forward'] },
+  attack: { label: 'Atacar', fps: 10, frames: ['preparing to attack, weapon or fist pulled far back, weight on the back foot', 'attacking, weapon or fist swinging forward with force', 'attack fully extended, weapon or arm at the end of the swing', 'recovering after the attack, returning to a guard stance'] },
+  jump: { label: 'Saltar', fps: 8, frames: ['crouching down preparing to jump, knees bent', 'jumping high in the air, legs tucked, arms raised', 'landing, knees bent absorbing the impact'] },
+  hurt: { label: 'Recibir daño', fps: 8, frames: ['recoiling from a hit, body bent backwards, pained expression', 'staggering back, off balance'] },
+  cast: { label: 'Lanzar hechizo', fps: 8, frames: ['raising both hands to channel magic', 'casting a spell, hands thrust forward with a glowing magic effect', 'after casting, magic fading, hands lowering'] },
+  death: { label: 'Morir', fps: 6, frames: ['falling backwards, losing balance', 'collapsed on the ground lying on its back, defeated'] },
+};
+const FRAME_RULES = 'Keep exactly the same character: same face, outfit, colors, art style, proportions, size in the frame and camera angle. Full body visible, plain solid pure white background, no shadow, no text. Change only the pose to:';
+
+async function runAnimate(cfg, job, o, log, quality, project) {
+  const { src, file, buf } = await sourceFile(cfg, o);
+  const A = ANIMS[o.anim] || ANIMS.walk;
+  const key = ANIMS[o.anim] ? o.anim : 'walk';
+  const seed = randSeed();
+  const files = {};
+  for (let i = 0; i < A.frames.length; i++) {
+    log(`Fotograma ${i + 1}/${A.frames.length} de “${A.label}” con FLUX Kontext…`);
+    const img = await editImage(cfg, { prompt: `${FRAME_RULES} ${A.frames[i]}.`, imageBuf: buf, quality, seed });
+    files[`frame_${String(i + 1).padStart(2, '0')}.png`] = img.buf;
+  }
+  const a = await createAsset(cfg, { name: `${src.name}_${key}`, project: src.project || project, kind: '2d', category: '2d-anim', anim: key, fps: A.fps, frames: A.frames.length, style: src.style, prompt: src.prompt, tags: [...(src.tags || []), 'anim', key], seed, quality, model: 'flux.1-kontext-dev', parent: src.id, parentFile: file, background: 'white' }, files);
+  job.assets.push(a);
+  log(`✔ ${A.frames.length} fotogramas guardados. Pulsa “Montar sprite sheet” para quitar fondos y alinearlos.`);
+  job.status = 'done';
+}
+
+// ───────────────────────── Blender (render local) ─────────────────────────
+const BLENDER_SCRIPT = path.join(ROOT, 'blender', 'nvf_blender.py');
+let blenderCache = null;
+function verKey(name) { return (String(name).match(/\d+/g) || []).map((n) => n.padStart(4, '0')).join('.'); }
+function blenderCandidates(cfg) {
+  const c = [];
+  if (cfg.blenderPath) c.push(cfg.blenderPath);
+  if (process.env.BLENDER_PATH) c.push(process.env.BLENDER_PATH);
+  const scan = (dir, rx, sub) => {
+    try { fs.readdirSync(dir).filter((d) => rx.test(d)).sort((a, b) => verKey(b).localeCompare(verKey(a))).forEach((d) => c.push(path.join(dir, d, sub))); } catch {}
+  };
+  if (process.platform === 'win32') {
+    for (const base of [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], 'C:\\Program Files']) if (base) scan(path.join(base, 'Blender Foundation'), /^Blender/i, 'blender.exe');
+    c.push('C:\\Program Files (x86)\\Steam\\steamapps\\common\\Blender\\blender.exe');
+    if (process.env.LOCALAPPDATA) scan(path.join(process.env.LOCALAPPDATA, 'Programs'), /^Blender/i, 'blender.exe');
+  } else if (process.platform === 'darwin') {
+    c.push('/Applications/Blender.app/Contents/MacOS/Blender', path.join(os.homedir(), 'Applications/Blender.app/Contents/MacOS/Blender'));
+  } else {
+    c.push('/usr/bin/blender', '/usr/local/bin/blender', '/snap/bin/blender', '/var/lib/flatpak/exports/bin/org.blender.Blender');
+    scan(os.homedir(), /^blender-\d/i, 'blender');
+    scan('/opt', /^blender/i, 'blender');
+  }
+  c.push('blender'); // en el PATH
+  return [...new Set(c)];
+}
+function blenderVersion(bin) {
+  return new Promise((res) => execFile(bin, ['-b', '--factory-startup', '--version'], { timeout: 90000, windowsHide: true }, (e, out) => {
+    const m = String(out || '').match(/Blender\s+(\d+\.\d+(?:\.\d+)?)/);
+    res(m ? m[1] : null);
+  }));
+}
+async function detectBlender(cfg, refresh = false) {
+  if (blenderCache && !refresh && blenderCache.key === cfg.blenderPath) return blenderCache;
+  for (const c of blenderCandidates(cfg)) {
+    if (path.isAbsolute(c) && !fs.existsSync(c)) continue;
+    const v = await blenderVersion(c);
+    if (v) return (blenderCache = { key: cfg.blenderPath, path: c, version: v });
+  }
+  return (blenderCache = { key: cfg.blenderPath, path: null, version: null });
+}
+function runBlender(bin, args, log) {
+  return new Promise((resolve, reject) => {
+    const f = path.join(os.tmpdir(), `nvf_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.json`);
+    fs.writeFileSync(f, JSON.stringify(args));
+    const p = spawn(bin, ['-b', '--factory-startup', '-P', BLENDER_SCRIPT, '--', f], { windowsHide: true });
+    let result = null, err = null, carry = '';
+    const tail = [];
+    const onData = (chunk) => {
+      const lines = (carry + chunk).split(/\r?\n/); carry = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('NVF:')) log('Blender · ' + line.slice(4));
+        else if (line.startsWith('NVF_RESULT:')) { try { result = JSON.parse(line.slice(11)); } catch {} }
+        else if (line.startsWith('NVF_ERROR:')) err = line.slice(10);
+        else if (line.trim()) { tail.push(line.trim()); if (tail.length > 6) tail.shift(); }
+      }
+    };
+    p.stdout.on('data', onData); p.stderr.on('data', onData);
+    const to = setTimeout(() => { err = 'Blender tardó más de 40 minutos'; p.kill(); }, 40 * 60e3);
+    p.on('error', (e) => { clearTimeout(to); reject(new Error('No se pudo lanzar Blender: ' + e.message)); });
+    p.on('close', (code) => {
+      clearTimeout(to); fs.unlink(f, () => {});
+      if (carry) onData('\n');
+      if (result) resolve(result);
+      else reject(new Error(err || `Blender terminó con código ${code}: ${short(tail.join(' | '), 300)}`));
+    });
+  });
+}
+async function runBlenderJob(cfg, job, o, log) {
+  const b = await detectBlender(cfg);
+  if (!b.path) throw new Error('No encuentro Blender. Instálalo gratis desde blender.org o pon la ruta de blender.exe en Ajustes.');
+  log(`Usando Blender ${b.version}`);
+  const a = await findAsset(cfg, o.assetId);
+  if (!a || a.kind !== '3d') throw new Error('Selecciona un asset 3D.');
+  const glbs = a.files.filter((f) => /\.glb$/i.test(f));
+  if (!glbs.length) throw new Error('El asset no tiene modelo .glb');
+  const name = slugName(a.name);
+  let args;
+  if (o.action === 'blender-process') {
+    args = { op: 'process', input: path.join(a.dir, a.files.includes('model.glb') ? 'model.glb' : glbs[0]), outDir: a.dir, name, height: Number(o.height) || null, maxTris: clampInt(o.maxTris, 0, 5e6, 0), lods: o.lods === false ? [] : [0.5, 0.25], formats: ['fbx', 'glb', 'obj'], saveBlend: true };
+  } else {
+    const opt = glbs.find((f) => /_optimized\.glb$/i.test(f));
+    args = { op: 'render', input: path.join(a.dir, opt || (a.files.includes('model.glb') ? 'model.glb' : glbs[0])), outDir: a.dir, name, directions: clampInt(o.directions, 1, 32, 8), size: clampInt(o.size, 32, 2048, 256), elevation: Number(o.elevation) || 30, engine: o.engine === 'cycles' ? 'cycles' : 'eevee', quality: o.quality || 'normal', heroSize: 1024, pixel: !!o.pixel };
+  }
+  const res = await runBlender(b.path, args, log);
+  job.assets.push(await readAsset(cfg, a.dir));
+  log('✔ Blender terminado: ' + (res.files || []).join(', '));
+  job.status = 'done';
+}
+
+// ───────────────────────── Prototipo jugable ─────────────────────────
+function pngSize(buf) {
+  if (buf.length > 24 && buf.readUInt32BE(12) === 0x49484452) return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  return null;
+}
+const GAME_SYS = `You are a senior HTML5 game developer. Write a complete, polished, playable single-file browser game.
+Rules:
+- Reply with exactly one \`\`\`html code block containing the full index.html, nothing else.
+- Use Phaser 3: <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+- Use ONLY the provided assets, loaded with their exact URLs (this.load.image, or this.load.spritesheet with the given frameWidth/frameHeight). Anything else (bullets, platforms, particles, UI) must be drawn with Phaser Graphics or textures generated with this.make.graphics().
+- Game size 960x540, Phaser.Scale.FIT with autoCenter. Scale sprites with setDisplaySize to sensible sizes. Assets marked "white background" are not transparent: use them as icons/cards or tint-free, or avoid overlapping them.
+- Arcade physics. Keyboard (arrows/WASD + space) and touch/pointer controls.
+- Title screen with the game name and "press to start", gameplay with score and lives or health, rising difficulty, game over screen with restart.
+- Create animations from spritesheets with the given fps.
+- Juice: tweens, screen shake, simple particles made with graphics.
+- No external assets, no network calls. Wrap any localStorage use in try/catch.
+- Clean commented code, no placeholders, no TODOs.`;
+
+function bestFile(a) {
+  const sheet = a.files.find((f) => /_sheet_\d+x\d+_n\d+\.png$/i.test(f));
+  if (sheet) return sheet;
+  if (a.kind === '3d') return a.files.find((f) => /_blender_\d+dir_/.test(f)) || a.files.find((f) => /^spritesheet_/.test(f)) || (a.files.includes('thumb.png') ? 'thumb.png' : null);
+  return a.files.filter((f) => /^processed.*\.png$/i.test(f)).pop() || (a.files.includes('source.png') ? 'source.png' : null);
+}
+async function runGame(cfg, job, o, log, project) {
+  const desc = String(o.prompt || '').trim();
+  if (!desc && !o.gameId) throw new Error('Describe el juego que quieres.');
+  let assets = (await listAssets(cfg)).filter((a) => a.project === project);
+  if (Array.isArray(o.assetIds) && o.assetIds.length) assets = assets.filter((a) => o.assetIds.includes(a.id));
+  else assets = assets.slice(0, 12);
+  const lines = [];
+  for (const a of assets) {
+    const f = bestFile(a); if (!f) continue;
+    const buf = await fsp.readFile(path.join(a.dir, f));
+    const sz = pngSize(buf) || { w: 0, h: 0 };
+    const url = a.url + encodeURIComponent(f);
+    const m = f.match(/_sheet_(\d+)x(\d+)_n(\d+)\.png$/i) || f.match(/_(\d+)dir_(\d+)px/);
+    let kind = `image ${sz.w}x${sz.h}`;
+    if (m && /_sheet_/.test(f)) kind = `spritesheet frameWidth=${m[1]} frameHeight=${m[2]} frames=${m[3]} fps=${a.fps || 8} (animation "${a.anim}")`;
+    else if (m) kind = `spritesheet frameWidth=${m[2]} frameHeight=${m[2]} frames=${m[1]} (one frame per facing direction, frame 0 = facing camera, then rotating)`;
+    const bg = /^processed|_sheet_|_dir|_blender_|thumb/.test(f) ? 'transparent background' : (a.background === 'white' ? 'white background' : 'opaque');
+    lines.push(`- key "${slugName(a.name)}_${a.id.slice(-4)}": ${url} · ${kind} · ${bg} · ${TYPES[a.category]?.label || a.category}: ${short(a.prompt || a.name, 120)}`);
+  }
+  if (!lines.length) throw new Error('No hay assets en este proyecto para usar en el juego.');
+  const dirOf = (id) => path.join(cfg.libraryPath, project, 'games', id);
+  let prev = null, gid = o.gameId ? String(o.gameId).replace(/[^\w-]/g, '') : null;
+  if (gid) { try { prev = await fsp.readFile(path.join(dirOf(gid), 'index.html'), 'utf8'); } catch { gid = null; } }
+  const messages = [{ role: 'system', content: GAME_SYS }];
+  if (prev) {
+    messages.push({ role: 'user', content: `Assets:\n${lines.join('\n')}\n\nCurrent game code:\n\`\`\`html\n${prev}\n\`\`\`\n\nChange request (may be in Spanish): ${desc || 'fix bugs and polish the game'}\nReturn the full updated index.html.` });
+  } else {
+    messages.push({ role: 'user', content: `Game idea (may be in Spanish; in-game text in Spanish): ${desc}\n\nAssets:\n${lines.join('\n')}` });
+  }
+  log(`Escribiendo el juego con ${cfg.llmProvider === 'local' ? llmLabel(cfg) : cfg.codeModel} (${lines.length} assets)…`);
+  const r = await chatOnce(cfg, messages, 8192, cfg.codeModel);
+  const txt = r.choices?.[0]?.message?.content || '';
+  const m = txt.match(/```html\s*([\s\S]*?)```/i) || txt.match(/```\s*(<!doctype[\s\S]*?)```/i) || txt.match(/(<!doctype html[\s\S]*<\/html>)/i);
+  if (!m) throw new Error('El modelo no devolvió código HTML. Prueba otra vez u otro modelo de código.');
+  const code = m[1].trim();
+  if (!gid) gid = `${slugName(desc || 'juego').slice(0, 30)}_${Date.now().toString(36)}`;
+  await fsp.mkdir(dirOf(gid), { recursive: true });
+  if (prev) await fsp.writeFile(path.join(dirOf(gid), `index_v${Date.now().toString(36)}.html`), prev);
+  await fsp.writeFile(path.join(dirOf(gid), 'index.html'), code);
+  const metaF = path.join(dirOf(gid), 'game.json');
+  let gm = {}; try { gm = JSON.parse(await fsp.readFile(metaF, 'utf8')); } catch {}
+  gm = { id: gid, project, title: gm.title || desc.slice(0, 80), history: [...(gm.history || []), { at: new Date().toISOString(), prompt: desc, model: cfg.codeModel }], assets: assets.map((a) => a.id) };
+  await fsp.writeFile(metaF, JSON.stringify(gm, null, 2));
+  job.game = { id: gid, url: urlFor(cfg, dirOf(gid)) + 'index.html', title: gm.title };
+  log(`✔ Juego listo: ${gm.title}`);
+  job.status = 'done';
+}
+async function listGames(cfg, project) {
+  const dir = path.join(cfg.libraryPath, safeName(project), 'games');
+  let ds = []; try { ds = await fsp.readdir(dir, { withFileTypes: true }); } catch { return []; }
+  const out = [];
+  for (const d of ds) {
+    if (!d.isDirectory()) continue;
+    try { const g = JSON.parse(await fsp.readFile(path.join(dir, d.name, 'game.json'), 'utf8')); out.push({ ...g, url: urlFor(cfg, path.join(dir, d.name)) + 'index.html', updated: g.history?.slice(-1)[0]?.at }); } catch {}
+  }
+  return out.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+}
+
+// ───────────────────────── Trabajos principales ─────────────────────────
 async function runJob(job, o) {
   const cfg = loadConfig();
   const log = (m) => { job.log.push(`${new Date().toLocaleTimeString('es-ES')}  ${m}`); console.log('  ' + m); };
@@ -393,6 +619,9 @@ async function runJob(job, o) {
   try {
     if (o.action === 'edit') return await runEdit(cfg, job, o, log, quality, project);
     if (o.action === 'to3d') return await runTo3D(cfg, job, o, log, quality, project);
+    if (o.action === 'animate') return await runAnimate(cfg, job, o, log, quality, project);
+    if (o.action === 'blender-process' || o.action === 'blender-render') return await runBlenderJob(cfg, job, o, log);
+    if (o.action === 'game') return await runGame(cfg, job, o, log, project);
 
     const category = TYPES[o.category] ? o.category : '2d-item';
     const T = TYPES[category];
@@ -402,35 +631,50 @@ async function runJob(job, o) {
     const size = SIZES.includes(o.size) ? o.size : T.size;
     const [w, h] = size.split('x').map(Number);
     const variants = clampInt(o.variants, 1, 4, 1);
+    const imgKey = o.imageModel || cfg.imageModel;
+    const m3dKey = o.model3d || cfg.model3d;
+    const proj = await loadProject(cfg, project);
+    const bible = String(proj.bible || '').trim();
+    if (bible) log('Aplicando la guía de estilo del proyecto.');
 
     let plan = o.plan && o.plan.image_prompt ? { ...o.plan, name: slugName(o.plan.name || prompt), source: 'editado' } : null;
     if (!plan && o.enhance !== false) {
       log(`Optimizando prompt con ${llmLabel(cfg)}…`);
-      try { plan = await enhancePrompt(cfg, prompt, category, style); log('Prompt optimizado.'); }
+      try { plan = await enhancePrompt(cfg, prompt, category, style, bible); log('Prompt optimizado.'); }
       catch (e) { log(`⚠ No se pudo optimizar (${short(e.message)}). Uso plantilla profesional local.`); }
     }
-    if (!plan) plan = fallbackPlan(prompt, category, style);
+    if (!plan) plan = fallbackPlan(prompt, category, style, bible);
     job.plan = plan;
+
+    let refBuf = null;
+    if (o.useRef && category !== '3d-text') {
+      refBuf = await referenceBuf(cfg, proj);
+      if (!refBuf) log('⚠ El proyecto no tiene imagen de referencia; genero sin ella.');
+    }
+    const label = refBuf ? 'FLUX Kontext + referencia de estilo' : imageModel(cfg, imgKey).label;
+    const makeImage = (W, H, seed) => refBuf
+      ? editImage(cfg, { prompt: `Create a completely new image of: ${plan.image_prompt} Use exactly the same art style, rendering technique, line work, color palette, lighting and level of detail as this reference image, but do not copy its subject, pose or composition.`.slice(0, 1800), imageBuf: refBuf, quality, seed })
+      : genImage(cfg, { prompt: plan.image_prompt, width: W, height: H, quality, seed, model: imgKey });
 
     for (let v = 0; v < variants; v++) {
       const seed = o.seed && variants === 1 ? clampInt(o.seed, 1, 2147483646, randSeed()) : randSeed();
       const tag = variants > 1 ? ` [${v + 1}/${variants}]` : '';
-      const meta = { name: plan.name, project, kind: T.kind, category, style, prompt, imagePrompt: plan.image_prompt, trellisPrompt: plan.trellis_prompt, tags: plan.tags || [], seed, quality, background: T.bg };
+      const meta = { name: plan.name, project, kind: T.kind, category, style, prompt, imagePrompt: plan.image_prompt, trellisPrompt: plan.trellis_prompt, tags: plan.tags || [], seed, quality, background: T.bg, styleRef: refBuf ? proj.refAssetId : undefined };
       if (T.kind === '2d') {
-        log(`Generando imagen ${w}×${h} con ${cfg.imageModel} (${cfg.backend2d === 'local' ? 'NIM local' : 'NVIDIA cloud'})${tag}…`);
-        const img = await genImage(cfg, { prompt: plan.image_prompt, width: w, height: h, quality, seed });
-        const a = await createAsset(cfg, { ...meta, model: cfg.imageModel, width: w, height: h }, { 'source.png': img.buf });
+        log(`Generando imagen ${refBuf ? '' : `${w}×${h} `}con ${label} (${cfg.backend2d === 'local' ? 'NIM local' : 'NVIDIA cloud'})${tag}…`);
+        const img = await makeImage(w, h, seed);
+        const a = await createAsset(cfg, { ...meta, model: refBuf ? 'flux.1-kontext-dev' : imgKey, width: (pngSize(img.buf) || {}).w || w, height: (pngSize(img.buf) || {}).h || h }, { 'source.png': img.buf });
         job.assets.push(a); log(`✔ Guardado ${a.name}${tag}`);
       } else if (category === '3d-text') {
-        log(`Generando 3D con TRELLIS (texto): “${plan.trellis_prompt}”${tag}…`);
-        const glb = await gen3D(cfg, { mode: 'text', prompt: plan.trellis_prompt, quality, seed });
-        const a = await createAsset(cfg, { ...meta, model: 'trellis', trellisMode: 'text' }, { 'model.glb': glb.buf });
+        log(`Generando 3D con ${model3D(cfg, m3dKey).label} (texto): “${plan.trellis_prompt}”${tag}…`);
+        const glb = await gen3D(cfg, { mode: 'text', prompt: plan.trellis_prompt, quality, seed, model: m3dKey });
+        const a = await createAsset(cfg, { ...meta, model: m3dKey, trellisMode: 'text' }, { 'model.glb': glb.buf });
         job.assets.push(a); log(`✔ Guardado ${a.name}${tag}`);
       } else {
-        log(`Generando concept 1024×1024 con ${cfg.imageModel}${tag}…`);
-        const img = await genImage(cfg, { prompt: plan.image_prompt, width: 1024, height: 1024, quality, seed });
-        const { glb, mode } = await imageTo3D(cfg, img.buf, plan.trellis_prompt, quality, seed, log);
-        const a = await createAsset(cfg, { ...meta, model: 'trellis', trellisMode: mode, conceptModel: cfg.imageModel }, { 'model.glb': glb.buf, 'concept.png': img.buf });
+        log(`Generando concept con ${label}${tag}…`);
+        const img = await makeImage(1024, 1024, seed);
+        const { glb, mode } = await imageTo3D(cfg, img.buf, plan.trellis_prompt, quality, seed, log, m3dKey);
+        const a = await createAsset(cfg, { ...meta, model: m3dKey, trellisMode: mode, conceptModel: refBuf ? 'flux.1-kontext-dev' : imgKey }, { 'model.glb': glb.buf, 'concept.png': img.buf });
         job.assets.push(a); log(`✔ Guardado ${a.name}${tag}`);
       }
     }
@@ -440,21 +684,22 @@ async function runJob(job, o) {
   }
 }
 
-async function imageTo3D(cfg, buf, fallbackPrompt, quality, seed, log) {
+async function imageTo3D(cfg, buf, fallbackPrompt, quality, seed, log, model) {
+  const label = model3D(cfg, model).label;
   try {
-    log(`Reconstruyendo en 3D con TRELLIS (imagen, ${cfg.backend3d === 'local' ? 'NIM local' : 'NVIDIA cloud'})…`);
-    return { glb: await gen3D(cfg, { mode: 'image', imageBuf: buf, quality, seed }), mode: 'image' };
+    log(`Reconstruyendo en 3D con ${label} (imagen, ${cfg.backend3d === 'local' ? 'NIM local' : 'NVIDIA cloud'})…`);
+    return { glb: await gen3D(cfg, { mode: 'image', imageBuf: buf, quality, seed, model }), mode: 'image' };
   } catch (e) {
     if (!fallbackPrompt) throw e;
     log(`⚠ Imagen→3D no disponible (${short(e.message, 120)}). Paso a texto→3D.`);
-    return { glb: await gen3D(cfg, { mode: 'text', prompt: fallbackPrompt, quality, seed }), mode: 'text' };
+    return { glb: await gen3D(cfg, { mode: 'text', prompt: fallbackPrompt, quality, seed, model }), mode: 'text' };
   }
 }
 
 async function sourceFile(cfg, o) {
   const src = await findAsset(cfg, o.assetId);
   if (!src) throw new Error('Asset de origen no encontrado.');
-  const file = o.file && src.files.includes(o.file) ? o.file : src.files.includes('source.png') ? 'source.png' : src.files.includes('concept.png') ? 'concept.png' : src.files.find((f) => /\.png$/i.test(f) && f !== 'thumb.png');
+  const file = o.file && src.files.includes(o.file) && /\.png$/i.test(o.file) ? o.file : src.files.includes('source.png') ? 'source.png' : src.files.includes('concept.png') ? 'concept.png' : src.files.find((f) => /\.png$/i.test(f) && f !== 'thumb.png');
   if (!file) throw new Error('El asset no tiene imagen.');
   return { src, file, buf: await fsp.readFile(path.join(src.dir, file)) };
 }
@@ -481,9 +726,10 @@ async function runEdit(cfg, job, o, log, quality, project) {
 async function runTo3D(cfg, job, o, log, quality, project) {
   const { src, file, buf } = await sourceFile(cfg, o);
   const seed = randSeed();
+  const m3dKey = o.model3d || cfg.model3d;
   const fb = src.trellisPrompt || String(src.prompt || src.name).slice(0, 77);
-  const { glb, mode } = await imageTo3D(cfg, buf, fb, quality, seed, log);
-  const a = await createAsset(cfg, { name: `${src.name}_3d`, project: src.project || project, kind: '3d', category: '3d-image', style: src.style, prompt: src.prompt, imagePrompt: src.imagePrompt, trellisPrompt: fb, tags: src.tags || [], seed, quality, model: 'trellis', trellisMode: mode, parent: src.id }, { 'model.glb': glb.buf, 'concept.png': buf });
+  const { glb, mode } = await imageTo3D(cfg, buf, fb, quality, seed, log, m3dKey);
+  const a = await createAsset(cfg, { name: `${src.name}_3d`, project: src.project || project, kind: '3d', category: '3d-image', style: src.style, prompt: src.prompt, imagePrompt: src.imagePrompt, trellisPrompt: fb, tags: src.tags || [], seed, quality, model: m3dKey, trellisMode: mode, parent: src.id }, { 'model.glb': glb.buf, 'concept.png': buf });
   job.assets.push(a); log(`✔ Modelo 3D guardado ${a.name} (desde ${file})`);
   job.status = 'done';
 }
@@ -586,6 +832,19 @@ const server = http.createServer(async (req, res) => {
       const buf = Buffer.from(String(b.data || '').replace(/^data:[^,]+,/, ''), 'base64');
       await fsp.writeFile(path.join(a.dir, name), buf);
       return send(res, 200, strip(await readAsset(cfg, a.dir)));
+    }
+    if (p === '/api/blender') {
+      const cfg = loadConfig();
+      const b = await detectBlender(cfg, u.searchParams.has('refresh') || req.method === 'POST');
+      return send(res, 200, { found: !!b.path, path: b.path, version: b.version });
+    }
+    if (p === '/api/project') {
+      const cfg = loadConfig(); const name = safeName(u.searchParams.get('name') || cfg.project) || 'MiJuego';
+      if (req.method === 'POST') return send(res, 200, await saveProject(cfg, name, await readBody(req)));
+      return send(res, 200, await loadProject(cfg, name));
+    }
+    if (p === '/api/games') {
+      const cfg = loadConfig(); return send(res, 200, await listGames(cfg, safeName(u.searchParams.get('project') || cfg.project) || 'MiJuego'));
     }
     if (p === '/api/open' && req.method === 'POST') {
       const cfg = loadConfig(); const b = await readBody(req);
