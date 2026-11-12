@@ -31,11 +31,11 @@ if (typeof fetch !== 'function') {
 const DEFAULTS = {
   apiKey: '',
   llmProvider: 'nvidia', // nvidia | local (FreeLLMAPI u otro servidor compatible OpenAI)
-  llmModel: 'meta/llama-3.3-70b-instruct',
+  llmModel: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   llmLocalUrl: 'http://localhost:31415/v1',
   llmLocalKey: '',
   llmLocalModel: 'auto',
-  imageModel: 'flux.1-dev',
+  imageModel: 'flux.2-klein-4b',
   customImagePath: '',
   model3d: 'trellis',
   custom3dPath: '',
@@ -46,7 +46,8 @@ const DEFAULTS = {
   libraryPath: path.join(ROOT, 'library'),
   project: 'MiJuego',
   blenderPath: '', // vacío = autodetectar
-  codeModel: 'qwen/qwen3-coder-480b-a35b-instruct',
+  codeModel: 'minimaxai/minimax-m3.1-flash',
+  visionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
 };
 
 function readConfigFile() {
@@ -96,19 +97,18 @@ const NV = {
 // Modelos de imagen. Cada usuario elige el que quiera, y puede añadir cualquier otro
 // de build.nvidia.com escribiendo su ruta (Ajustes → modelo personalizado).
 const IMAGE_MODELS = {
-  'flux.1-dev': { label: 'FLUX.1 dev · máxima calidad', path: 'black-forest-labs/flux.1-dev', mode: 'base', steps: { draft: 20, normal: 30, high: 50 }, cfg: 3.5 },
-  'flux.1-schnell': { label: 'FLUX.1 schnell · muy rápido', path: 'black-forest-labs/flux.1-schnell', mode: 'base', steps: { draft: 4, normal: 4, high: 4 }, cfg: null },
-  'sd3.5-large': { label: 'Stable Diffusion 3.5 Large', path: 'stabilityai/stable-diffusion-3.5-large', mode: 'base', steps: { draft: 20, normal: 40, high: 50 }, cfg: 4.5 },
-  'qwen-image': { label: 'Qwen-Image · bueno con texto', path: 'qwen/qwen-image', steps: { draft: 20, normal: 30, high: 50 }, cfg: 4 },
+  'flux.2-klein-4b': { label: 'FLUX.2 klein · rápido y nítido (recomendado)', path: 'black-forest-labs/flux.2-klein-4b', steps: { draft: 4, normal: 4, high: 4 }, cfg: null },
+  'flux.1-dev': { label: 'FLUX.1 dev · más pasos (a veces saturado)', path: 'black-forest-labs/flux.1-dev', mode: 'base', steps: { draft: 20, normal: 30, high: 50 }, cfg: 3.5 },
+  'flux.1-schnell': { label: 'FLUX.1 schnell', path: 'black-forest-labs/flux.1-schnell', mode: 'base', steps: { draft: 4, normal: 4, high: 4 }, cfg: null },
 };
 const MODELS_3D = {
   trellis: { label: 'Microsoft TRELLIS', path: 'microsoft/trellis' },
 };
-const LLM_SUGGESTIONS = ['meta/llama-3.3-70b-instruct', 'nvidia/llama-3.3-nemotron-super-49b-v1.5', 'qwen/qwen3-coder-480b-a35b-instruct', 'deepseek-ai/deepseek-v3.1', 'mistralai/mistral-medium-3-instruct', 'openai/gpt-oss-120b'];
+const LLM_SUGGESTIONS = ['nvidia/nemotron-3.5-lightning-30b-a3b', 'minimaxai/minimax-m3.1-flash', 'mistralai/mistral-large-4-1t-a52b', 'z-ai/glm-5.3-flash', 'deepseek-ai/deepseek-v4.1-flash', 'openai/gpt-oss-20b'];
 function imageModel(cfg, key) {
   key = key || cfg.imageModel;
   if (key === 'custom' && cfg.customImagePath) return { label: 'Personalizado', path: cfg.customImagePath.replace(/^https?:\/\/[^/]+\/v1\/genai\//, ''), steps: { draft: 20, normal: 30, high: 40 }, cfg: null };
-  return IMAGE_MODELS[key] || IMAGE_MODELS['flux.1-dev'];
+  return IMAGE_MODELS[key] || IMAGE_MODELS['flux.2-klein-4b'];
 }
 function model3D(cfg, key) {
   key = key || cfg.model3d;
@@ -179,10 +179,19 @@ async function uploadNvcfAsset(buf, apiKey, contentType = 'image/png') {
   if (!put.ok) throw new Error(`Fallo al subir la imagen (${put.status})`);
   return assetId;
 }
+const CLOUD_NO_INPUT = 'La nube gratuita de NVIDIA solo acepta sus imágenes de ejemplo como entrada; para usar imágenes propias (variaciones exactas, referencia de estilo, imagen→3D) hace falta NIM local';
+function mimeOf(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
+  if (buf.slice(0, 4).toString('hex') === '89504e47') return 'image/png';
+  if (buf.slice(8, 12).toString() === 'WEBP') return 'image/webp';
+  return 'image/png';
+}
+const extOf = (buf) => ({ 'image/jpeg': '.jpg', 'image/webp': '.webp' }[mimeOf(buf)] || '.png');
 async function imageInput(buf, local, apiKey) {
-  if (local) return { value: 'data:image/png;base64,' + buf.toString('base64'), headers: {} };
-  const id = await uploadNvcfAsset(buf, apiKey);
-  return { value: `data:image/png;asset_id,${id}`, headers: { 'NVCF-INPUT-ASSET-REFERENCES': id, 'NVCF-FUNCTION-ASSET-IDS': id } };
+  if (local) return { value: `data:${mimeOf(buf)};base64,` + buf.toString('base64'), headers: {} };
+  if (!process.env.NVF_CLOUD_IMAGE_INPUT) { const e = new Error(CLOUD_NO_INPUT); e.cloudInput = true; throw e; }
+  const id = await uploadNvcfAsset(buf, apiKey, mimeOf(buf));
+  return { value: `data:${mimeOf(buf)};asset_id,${id}`, headers: { 'NVCF-INPUT-ASSET-REFERENCES': id, 'NVCF-FUNCTION-ASSET-IDS': id } };
 }
 
 async function genImage(cfg, { prompt, width, height, quality, seed, model }) {
@@ -227,6 +236,7 @@ async function gen3D(cfg, { mode, prompt, imageBuf, quality, seed, model }) {
 
 async function chatOnce(cfg, messages, max_tokens, nvModel) {
   const body = { messages, temperature: 0.35, top_p: 0.9, max_tokens, stream: false };
+  const nvBody = { ...body, chat_template_kwargs: { enable_thinking: false, thinking: false } };
   if (cfg.llmProvider === 'local') {
     const headers = cfg.llmLocalKey ? { Authorization: `Bearer ${cfg.llmLocalKey}` } : {};
     try {
@@ -237,17 +247,17 @@ async function chatOnce(cfg, messages, max_tokens, nvModel) {
     }
   }
   try {
-    return await nvRequest(NV.chat, { ...body, model: nvModel || cfg.llmModel }, { apiKey: cfg.apiKey });
+    return await nvRequest(NV.chat, { ...nvBody, model: nvModel || cfg.llmModel }, { apiKey: cfg.apiKey });
   } catch (e) {
     if (nvModel && nvModel !== cfg.llmModel && [400, 404, 422].includes(e.status)) // modelo no disponible → el LLM general
-      return nvRequest(NV.chat, { ...body, model: cfg.llmModel }, { apiKey: cfg.apiKey });
+      return nvRequest(NV.chat, { ...nvBody, model: cfg.llmModel }, { apiKey: cfg.apiKey });
     throw e;
   }
 }
 const llmLabel = (cfg) => (cfg.llmProvider === 'local' ? `LLM local (${cfg.llmLocalModel || 'auto'})` : cfg.llmModel);
 
 async function llmJSON(cfg, system, user) {
-  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], 900);
+  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], 2000);
   let txt = j.choices?.[0]?.message?.content || '';
   txt = txt.replace(/<think>[\s\S]*?<\/think>/g, '');
   const s = txt.indexOf('{'), e = txt.lastIndexOf('}');
@@ -274,9 +284,11 @@ const TYPES = {
     guide: 'Single game visual effect sprite (magic, explosion, energy or particles), centered, glowing, vivid emissive colors, isolated on a plain solid pure black background, no environment, no text.' },
   '2d-concept': { kind: '2d', group: '2D', label: 'Concept art', size: '1344x768', bg: 'none', hint: 'Exploración visual para el equipo de arte.',
     guide: 'Professional game concept art, clear design language, strong shape language, cohesive color palette, polished presentation, no text.' },
-  '3d-image': { kind: '3d', group: '3D', label: 'Modelo 3D (concept → 3D) ★', size: '1024x1024', bg: 'white', hint: 'Mejor calidad: genera un concept con FLUX y lo reconstruye en 3D con TRELLIS.',
+  '3d-blender': { kind: '3d', group: '3D', label: 'Modelo 3D pro en Blender ★', size: '1024x1024', bg: 'none', hint: 'Un LLM modela el asset en Blender con texturas FLUX y un director de arte (IA de visión) lo revisa. Topología limpia, FBX/GLB/.blend. Requiere Blender.',
+    guide: 'Procedural Blender model.' },
+  '3d-image': { kind: '3d', group: '3D', label: 'Modelo 3D IA (concept → TRELLIS)', size: '1024x1024', bg: 'white', hint: 'Mejor calidad: genera un concept con FLUX y lo reconstruye en 3D con TRELLIS.',
     guide: 'Single object or character designed for 3D reconstruction, entire subject fully visible and centered, three-quarter front view from slightly above, neutral soft studio lighting, no dramatic shadows, plain solid pure white background, no ground, no text, clean shapes, clearly defined materials and colors.' },
-  '3d-text': { kind: '3d', group: '3D', label: 'Modelo 3D (texto → 3D)', size: '1024x1024', bg: 'none', hint: 'Directo con TRELLIS, más rápido.',
+  '3d-text': { kind: '3d', group: '3D', label: 'Modelo 3D IA (texto → TRELLIS)', size: '1024x1024', bg: 'none', hint: 'Directo con TRELLIS, más rápido.',
     guide: 'Single 3D game-ready object.' },
 };
 const STYLES = {
@@ -293,14 +305,14 @@ const STYLES = {
   vector: { label: 'Vector flat', p: 'flat vector art, clean geometric shapes, minimal gradients' },
 };
 
-const ENHANCE_SYS = `You are a senior game art director and prompt engineer for the FLUX.1 image model and the TRELLIS text/image-to-3D model.
-Turn the user's request (it may be in Spanish or any language) into production-ready prompts for ONE game asset.
+const ENHANCE_SYS = `You are the art director of a top-tier game studio and an expert prompt engineer for the FLUX.1 image model and the TRELLIS image/text-to-3D model.
+Turn the user's request (it may be in Spanish or any language) into a production-ready brief for ONE game asset at professional studio quality.
 Return ONLY a JSON object, no markdown, with keys:
 "name": short English snake_case asset name, 1-4 words;
-"image_prompt": English prompt for FLUX, 45-90 words, starting with the subject, then style, then framing/background/lighting rules. Concrete nouns, shapes, materials, colors. Never mention resolution numbers or camera brands;
-"trellis_prompt": English, MAXIMUM 70 characters, a single object with concrete shape, material and color words, no background words;
+"image_prompt": English prompt for FLUX, 70-120 words. Order: (1) the subject with a strong, specific design idea: era/culture, silhouette, proportions, 2-3 signature details, materials and wear; (2) the art style and rendering technique; (3) professional quality cues: clean readable silhouette, clear shape language (big/medium/small forms), strong value contrast, harmonious limited color palette with one accent color, consistent single key light from the upper left with soft fill and subtle rim light, crisp edges, polished final production asset, high detail where it matters; (4) the mandatory framing/background rules. Use concrete nouns and adjectives, no vague words like "beautiful" or "epic", no resolution numbers, no camera brands, no artist names;
+"trellis_prompt": English, MAXIMUM 70 characters, one object with concrete shape, material and color words, no background words;
 "tags": array of 3-6 lowercase English tags.
-Strictly respect the asset framing rules and the art style given. Keep any detail the user asked for. Do not add text, logos, watermarks or brand names.`;
+Strictly respect the asset framing rules and the art style given. Keep every detail the user asked for. No text, letters, logos, watermarks, UI or brand names in the image.`;
 
 function slugName(s) {
   return String(s || 'asset').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'asset';
@@ -531,8 +543,19 @@ async function runBlenderJob(cfg, job, o, log) {
 // ───────────────────────── Prototipo jugable ─────────────────────────
 function pngSize(buf) {
   if (buf.length > 24 && buf.readUInt32BE(12) === 0x49484452) return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  if (buf[0] === 0xff && buf[1] === 0xd8) { // JPEG: buscar el marcador SOF
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
   return null;
 }
+const isSource = (f) => /^source\.(png|jpe?g|webp)$/i.test(f);
+const srcOf = (a) => a.files.find(isSource) || (a.files.find((f) => /^concept\.(png|jpe?g|webp)$/i.test(f))) || null;
 const GAME_SYS = `You are a senior HTML5 game developer. Write a complete, polished, playable single-file browser game.
 Rules:
 - Reply with exactly one \`\`\`html code block containing the full index.html, nothing else.
@@ -582,8 +605,8 @@ async function runGame(cfg, job, o, log, project) {
     messages.push({ role: 'user', content: `Game idea (may be in Spanish; in-game text in Spanish): ${desc}\n\nAssets:\n${lines.join('\n')}` });
   }
   log(`Escribiendo el juego con ${cfg.llmProvider === 'local' ? llmLabel(cfg) : cfg.codeModel} (${lines.length} assets)…`);
-  const r = await chatOnce(cfg, messages, 8192, cfg.codeModel);
-  const txt = r.choices?.[0]?.message?.content || '';
+  const r = await chatStream(cfg, messages, cfg.codeModel, 16000, (n) => log(`… ${n} líneas`));
+  const txt = r.text || '';
   const m = txt.match(/```html\s*([\s\S]*?)```/i) || txt.match(/```\s*(<!doctype[\s\S]*?)```/i) || txt.match(/(<!doctype html[\s\S]*<\/html>)/i);
   if (!m) throw new Error('El modelo no devolvió código HTML. Prueba otra vez u otro modelo de código.');
   const code = m[1].trim();
@@ -610,6 +633,181 @@ async function listGames(cfg, project) {
   return out.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
 }
 
+// ───────────────────────── 3D pro: Blender + LLM + texturas FLUX ─────────────────────────
+// Respuestas largas por streaming (evita cortes) y sin "modo razonamiento" para que el
+// presupuesto de tokens se use en el código.
+async function chatStream(cfg, messages, model, max_tokens = 16000, onProgress) {
+  const local = cfg.llmProvider === 'local';
+  const url = local ? trimUrl(cfg.llmLocalUrl) + '/chat/completions' : NV.chat;
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
+  if (local) { if (cfg.llmLocalKey) headers.Authorization = `Bearer ${cfg.llmLocalKey}`; }
+  else { if (!cfg.apiKey) throw new Error('Falta la API key de NVIDIA.'); headers.Authorization = `Bearer ${cfg.apiKey}`; }
+  const body = { model: local ? (cfg.llmLocalModel || 'auto') : model, messages, temperature: 0.4, top_p: 0.95, max_tokens, stream: true };
+  if (!local) body.chat_template_kwargs = { enable_thinking: false, thinking: false };
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const t = await res.text();
+    const e = new Error(`LLM ${res.status}: ${short(t, 300)}`); e.status = res.status; throw e;
+  }
+  const dec = new TextDecoder(); let buf = '', text = '', reasoning = 0, finish = null, last = 0;
+  for await (const chunk of res.body) {
+    buf += dec.decode(chunk, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith('data:')) continue;
+      const p = line.slice(5).trim(); if (p === '[DONE]') continue;
+      try {
+        const c = JSON.parse(p).choices?.[0]; if (!c) continue;
+        text += c.delta?.content || '';
+        reasoning += (c.delta?.reasoning_content || c.delta?.reasoning || '').length;
+        if (c.finish_reason) finish = c.finish_reason;
+      } catch {}
+    }
+    if (onProgress && Date.now() - last > 15000) { last = Date.now(); onProgress(text.split('\n').length); }
+  }
+  return { text, finish, reasoning };
+}
+const extractPython = (t) => { const m = t.match(/```(?:python|py)?\s*\n([\s\S]*?)```/i); return (m ? m[1] : t.replace(/```\w*/g, '')).trim(); };
+
+const BUILD_PROMPT_FILE = path.join(ROOT, 'blender', 'build_prompt.md');
+const PLAN3D_SYS = `You are the art director of a game studio planning ONE 3D game asset that will be modelled procedurally in Blender.
+Return ONLY JSON: {"name": "snake_case english name", "brief": "precise English modelling brief, 60-120 words: overall shape and real dimensions in meters, every main part, materials, colour palette with one accent, small details and props that sell the asset", "textures": [{"key": "short_snake_key", "prompt": "what the tileable texture shows, e.g. rough grey fieldstone masonry"}]}
+Use 2-6 textures for the large surfaces only (walls, roof, ground, wood, metal plates...). Reuse these keys when they fit: {EXISTING}.`;
+
+async function projectTextures(cfg, project) {
+  const dir = path.join(cfg.libraryPath, safeName(project), 'textures');
+  const out = {};
+  try { for (const f of await fsp.readdir(dir)) { const m = f.match(/^([\w-]+)\.(png|jpe?g|webp)$/i); if (m) out[m[1]] = path.join(dir, f); } } catch {}
+  return { dir, map: out };
+}
+async function ensureTextures(cfg, project, wanted, styleText, log, imgKey) {
+  const { dir, map } = await projectTextures(cfg, project);
+  await fsp.mkdir(dir, { recursive: true });
+  const todo = wanted.filter((t) => t && t.key && !map[slugName(t.key)]).slice(0, 6);
+  await Promise.all(todo.map(async (t) => {
+    const key = slugName(t.key);
+    log(`Textura “${key}” con ${imageModel(cfg, imgKey).label}…`);
+    const prompt = `Seamless tileable game texture of ${t.prompt}, ${styleText || 'stylized hand-painted game art'}, flat orthographic front view, even diffuse lighting, no cast shadows, no perspective, uniform pattern from edge to edge, fills the entire frame, no text`;
+    try {
+      const img = await genImage(cfg, { prompt, width: 1024, height: 1024, quality: 'normal', seed: randSeed(), model: imgKey });
+      const f = path.join(dir, key + extOf(img.buf));
+      await fsp.writeFile(f, img.buf); map[key] = f;
+    } catch (e) { log(`⚠ Textura ${key} no generada (${short(e.message, 100)}); se usará color plano.`); }
+  }));
+  return map;
+}
+async function reviewRender(cfg, file, brief, log) {
+  if (cfg.llmProvider === 'local') return null;
+  const buf = await fsp.readFile(file);
+  try {
+    const r = await nvRequest(NV.chat, {
+      model: cfg.visionModel,
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: `You are the art director of a AAA game studio reviewing a 3D asset render. Brief: ${brief}\nList the 6 most important MODELLING problems (wrong proportions, floating or intersecting parts, missing parts from the brief, weak silhouette, lack of detail, bad colours). For each give one concrete geometric fix with sizes in meters. Be brief.` },
+        { type: 'image_url', image_url: { url: `data:${mimeOf(buf)};base64,${buf.toString('base64')}` } },
+      ] }],
+      max_tokens: 700, temperature: 0.2, chat_template_kwargs: { enable_thinking: false },
+    }, { apiKey: cfg.apiKey });
+    return r.choices?.[0]?.message?.content || null;
+  } catch (e) { log(`⚠ Revisión visual no disponible (${short(e.message, 100)}).`); return null; }
+}
+
+async function runBuild3D(cfg, job, o, log, quality, project) {
+  const b = await detectBlender(cfg);
+  if (!b.path) throw new Error('Para los modelos 3D pro hace falta Blender (gratis en blender.org). Si ya lo tienes, pon su ruta en Ajustes.');
+  const prompt = String(o.prompt || '').trim();
+  if (!prompt) throw new Error('Describe el modelo 3D.');
+  const style = STYLES[o.style] ? o.style : 'auto';
+  const proj = await loadProject(cfg, project);
+  const styleText = [STYLES[style].p, proj.bible].filter(Boolean).join(', ');
+  const imgKey = o.imageModel || cfg.imageModel;
+  const codeModel = cfg.codeModel;
+  const reviews = clampInt(o.reviews, 0, 3, quality === 'draft' ? 0 : quality === 'high' ? 2 : 1);
+
+  // 1) plan de dirección de arte
+  const { map: existing } = await projectTextures(cfg, project);
+  log(`Dirección de arte con ${llmLabel(cfg)}…`);
+  let plan;
+  try {
+    plan = await llmJSON(cfg, PLAN3D_SYS.replace('{EXISTING}', Object.keys(existing).join(', ') || 'none'), `Asset request (any language): ${prompt}\nArt style: ${styleText || 'stylized game art'}`);
+  } catch (e) {
+    log(`⚠ Plan automático no disponible (${short(e.message, 100)}); uso la descripción tal cual.`);
+    plan = { name: slugName(prompt), brief: prompt, textures: [] };
+  }
+  const name = slugName(plan.name || prompt);
+  const brief = String(plan.brief || prompt);
+  log(`Brief: ${short(brief, 220)}`);
+
+  // 2) texturas tileables (se reutilizan en todo el proyecto)
+  const tex = await ensureTextures(cfg, project, Array.isArray(plan.textures) ? plan.textures : [], styleText, log, imgKey);
+  const texList = Object.keys(tex).map((k) => k).join(', ') || 'none';
+
+  // 3) script de Blender por el LLM + construcción, con autocorrección
+  const sys = (await fsp.readFile(BUILD_PROMPT_FILE, 'utf8')).replace('{TEXTURES}', texList);
+  const messages = [{ role: 'system', content: sys }, { role: 'user', content: `Asset: ${prompt}\nArt direction brief: ${brief}\nStyle: ${styleText || 'stylized game art'}` }];
+  const id = Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+  const dir = path.join(cfg.libraryPath, project, '3d', `${name}_${id}`);
+  await fsp.mkdir(dir, { recursive: true });
+  const bargs = { op: 'build', outDir: dir, name, engine: o.engine === 'cycles' ? 'cycles' : 'eevee', quality, heroSize: 1024, textures: tex };
+  let code = null, result = null, lastErr = null, version = 0;
+  const writeScript = async () => {
+    log(`Escribiendo el modelo en Python para Blender con ${cfg.llmProvider === 'local' ? llmLabel(cfg) : codeModel}…`);
+    const r = await chatStream(cfg, messages, codeModel, 16000, (n) => log(`… ${n} líneas`));
+    const c = extractPython(r.text);
+    if (c.split('\n').length < 10) throw new Error(`El modelo de código no devolvió un script (${r.finish || 'vacío'}). Prueba otro modelo en Ajustes.`);
+    messages.push({ role: 'assistant', content: '```python\n' + c + '\n```' });
+    return c;
+  };
+  const build = async (c) => {
+    version++;
+    const f = path.join(dir, version === 1 ? 'model_script.py' : `model_script_v${version}.py`);
+    await fsp.writeFile(f, c);
+    return runBlender(b.path, { ...bargs, script: f }, log);
+  };
+  for (let attempt = 0; attempt < 3 && !result; attempt++) {
+    try {
+      code = await writeScript();
+      result = await build(code);
+    } catch (e) {
+      lastErr = e;
+      if (/no devolvió un script|API key|401|403/.test(e.message)) throw e;
+      log(`⚠ Error al construir: ${short(e.message, 200)}. Pido la corrección…`);
+      messages.push({ role: 'user', content: `Blender raised this error running your script:\n${e.message}\nFix it and return the full corrected script.` });
+    }
+  }
+  if (!result) throw lastErr || new Error('No se pudo construir el modelo.');
+  log(`✔ Modelo construido: ${result.objects} piezas, ${result.triangles.toLocaleString('es')} triángulos`);
+
+  // 4) revisión del director de arte (modelo de visión) → mejoras
+  for (let r = 0; r < reviews; r++) {
+    const critique = await reviewRender(cfg, path.join(dir, 'render_hero.png'), brief, log);
+    if (!critique) break;
+    log(`Revisión ${r + 1}/${reviews} del director de arte (${cfg.visionModel}): ${short(critique.replace(/\s+/g, ' '), 260)}`);
+    await fsp.copyFile(path.join(dir, 'render_hero.png'), path.join(dir, `render_v${version}.png`)).catch(() => {});
+    messages.push({ role: 'user', content: `Art director review of the current render:\n${critique}\nApply every fix that is possible with the kit, keep everything that already works, and return the full improved script.` });
+    try {
+      const c = await writeScript();
+      const res2 = await build(c);
+      result = res2; code = c;
+      log(`✔ Versión ${version}: ${res2.objects} piezas, ${res2.triangles.toLocaleString('es')} triángulos`);
+    } catch (e) {
+      log(`⚠ La mejora falló (${short(e.message, 160)}); conservo la versión anterior.`);
+      messages.push({ role: 'user', content: `That version failed: ${e.message}. Return the previous working script unchanged.` });
+      const prev = path.join(dir, version - 1 === 1 ? 'model_script.py' : `model_script_v${version - 1}.py`);
+      try { result = await runBlender(b.path, { ...bargs, script: prev }, log); } catch {}
+      break;
+    }
+  }
+  await fsp.copyFile(path.join(dir, 'render_hero.png'), path.join(dir, 'thumb.png')).catch(() => {});
+  const meta = { id, name, project, kind: '3d', category: '3d-blender', style, prompt, imagePrompt: brief, tags: ['blender', 'procedural', style].filter((x) => x !== 'auto'), seed: 0, quality, model: `${codeModel} + Blender ${b.version}`, triangles: result.triangles, parts: result.objects, textures: Object.keys(tex), reviews, createdAt: new Date().toISOString() };
+  await fsp.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2));
+  const a = await readAsset(cfg, dir);
+  job.assets.push(a);
+  log(`✔ Guardado ${name}: FBX, GLB, .blend, render y script editable`);
+  job.status = 'done';
+}
+
 // ───────────────────────── Trabajos principales ─────────────────────────
 async function runJob(job, o) {
   const cfg = loadConfig();
@@ -622,6 +820,7 @@ async function runJob(job, o) {
     if (o.action === 'animate') return await runAnimate(cfg, job, o, log, quality, project);
     if (o.action === 'blender-process' || o.action === 'blender-render') return await runBlenderJob(cfg, job, o, log);
     if (o.action === 'game') return await runGame(cfg, job, o, log, project);
+    if (o.category === '3d-blender') return await runBuild3D(cfg, job, o, log, quality, project);
 
     const category = TYPES[o.category] ? o.category : '2d-item';
     const T = TYPES[category];

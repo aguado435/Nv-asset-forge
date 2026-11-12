@@ -281,7 +281,10 @@ details.sec summary::-webkit-details-marker{display:none}
       <div><label for="sC3d">Otro modelo 3D (ruta)</label><input type="text" id="sC3d" placeholder="publisher/modelo"></div>
     </div>
     <div class="row">
-      <div><label for="sCode">Modelo LLM para crear juegos</label><input type="text" id="sCode" list="llmList"></div>
+      <div><label for="sCode">LLM de código (modelos 3D en Blender y juegos)</label><input type="text" id="sCode" list="llmList"></div>
+      <div><label for="sVis">Modelo de visión (director de arte)</label><input type="text" id="sVis" placeholder="nvidia/nemotron-3.5-super-vl-120b-a12b"></div>
+    </div>
+    <div class="row">
       <div><label for="sProv">LLM que optimiza los prompts</label><select id="sProv"><option value="nvidia">NVIDIA Build</option><option value="local">Local compatible OpenAI (FreeLLMAPI)</option></select></div>
     </div>
     <div id="provNv"><label for="sLlm">Modelo LLM de NVIDIA</label><input type="text" id="sLlm" list="llmList"></div>
@@ -382,7 +385,7 @@ function onCategory() {
   $('#sizeWrap').style.visibility = t.kind === '3d' ? 'hidden' : 'visible';
   const cat = $('#category').value;
   $('#imgModelWrap').style.visibility = cat === '3d-text' ? 'hidden' : 'visible';
-  $('#m3dWrap').style.visibility = t.kind === '3d' ? 'visible' : 'hidden';
+  $('#m3dWrap').style.visibility = t.kind === '3d' && cat !== '3d-blender' ? 'visible' : 'hidden';
   $('#useRefWrap').style.display = PROJ.refAssetId && cat !== '3d-text' ? 'flex' : 'none';
   LS.set('category', $('#category').value);
 }
@@ -414,11 +417,11 @@ function openSettings() {
   $('#sKey').value = CFG.apiKey; $('#sLlm').value = CFG.llmModel; $('#sProv').value = CFG.llmProvider; $('#sLu').value = CFG.llmLocalUrl; $('#sLm').value = CFG.llmLocalModel; $('#sLk').value = CFG.llmLocalKey; provToggle(); $('#sImg').value = CFG.imageModel;
   $('#sB2').value = CFG.backend2d; $('#sB3').value = CFG.backend3d; $('#sL2').value = CFG.local2dUrl; $('#sL3').value = CFG.local3dUrl;
   $('#sLib').value = CFG.libraryPath; $('#testRes').textContent = '';
-  $('#sM3d').value = CFG.model3d; $('#sCImg').value = CFG.customImagePath; $('#sC3d').value = CFG.custom3dPath; $('#sCode').value = CFG.codeModel; $('#sBl').value = CFG.blenderPath;
+  $('#sM3d').value = CFG.model3d; $('#sCImg').value = CFG.customImagePath; $('#sC3d').value = CFG.custom3dPath; $('#sCode').value = CFG.codeModel; $('#sVis').value = CFG.visionModel; $('#sBl').value = CFG.blenderPath;
   $('#settings').classList.add('show');
 }
 async function saveSettings() {
-  await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value, model3d: $('#sM3d').value, customImagePath: $('#sCImg').value, custom3dPath: $('#sC3d').value, codeModel: $('#sCode').value, blenderPath: $('#sBl').value });
+  await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value, model3d: $('#sM3d').value, customImagePath: $('#sCImg').value, custom3dPath: $('#sC3d').value, codeModel: $('#sCode').value, visionModel: $('#sVis').value, blenderPath: $('#sBl').value });
   await loadConfig(); await loadLibrary(); checkBlender(true);
 }
 function provToggle() { const l = $('#sProv').value === 'local'; $('#provLocal').style.display = l ? 'block' : 'none'; $('#provNv').style.display = l ? 'none' : 'block'; }

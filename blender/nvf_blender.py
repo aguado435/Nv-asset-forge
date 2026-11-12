@@ -431,16 +431,123 @@ def op_render(a):
     return {"files": files, "directions": dirs, "size": size}
 
 
+# ───────────────────────── build (modelado procedural) ─────────────────────────
+def frame_camera(scene, objs, size, elev_deg=28, azim_deg=-38, lens=50, pad=1.08):
+    pts = [o.matrix_world @ Vector(c) for o in objs for c in o.bound_box]
+    mn = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    mx = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    center = (mn + mx) / 2
+    radius = max((p - center).length for p in pts)
+    cam_data = bpy.data.cameras.new("hero_cam")
+    cam_data.lens = lens
+    cam_data.sensor_width = 36
+    fov = 2 * math.atan(18.0 / lens)
+    dist = radius / math.sin(fov / 2) * pad
+    e, az = math.radians(elev_deg), math.radians(azim_deg)
+    direction = Vector((math.sin(az) * math.cos(e), -math.cos(az) * math.cos(e), math.sin(e)))
+    cam = bpy.data.objects.new("hero_cam", cam_data)
+    scene.collection.objects.link(cam)
+    cam.location = center + direction * dist
+    cam_data.clip_end = dist * 4
+    target = bpy.data.objects.new("hero_target", None)
+    scene.collection.objects.link(target)
+    target.location = center
+    tr = cam.constraints.new("TRACK_TO")
+    tr.target = target
+    tr.track_axis = "TRACK_NEGATIVE_Z"
+    tr.up_axis = "UP_Y"
+    scene.camera = cam
+    return center, radius
+
+
+def studio_lights(scene, strength=1.0):
+    add_light("key", "SUN", 3.5 * strength, (48, 0, -40), (1.0, 0.96, 0.9))
+    add_light("fill", "SUN", 0.9 * strength, (65, 0, 130), (0.8, 0.88, 1.0))
+    add_light("rim", "SUN", 2.0 * strength, (115, 0, 175), (1.0, 0.92, 0.85))
+    w = bpy.data.worlds.new("NVF_Sky")
+    scene.world = w
+    w.use_nodes = True
+    bg = next((n for n in w.node_tree.nodes if n.type == "BACKGROUND"), None)
+    if bg is None:
+        bg = w.node_tree.nodes.new("ShaderNodeBackground")
+        outn = next((n for n in w.node_tree.nodes if n.type == "OUTPUT_WORLD"), None) or w.node_tree.nodes.new("ShaderNodeOutputWorld")
+        w.node_tree.links.new(bg.outputs[0], outn.inputs[0])
+    bg.inputs[0].default_value = (0.62, 0.72, 0.85, 1)
+    bg.inputs[1].default_value = 0.8 * strength
+
+
+def op_build(a):
+    out = a["outDir"]
+    name = a.get("name", "asset")
+    reset_scene()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import importlib
+    import nvf_kit as kit
+    importlib.reload(kit)
+    kit._MATS.clear()
+    kit.TEXTURES.clear()
+    kit.TEXTURES.update(a.get("textures", {}))
+    ns = {k: getattr(kit, k) for k in dir(kit) if not k.startswith("_")}
+    ns.update({"math": math, "random": kit.random, "Vector": Vector, "bpy": bpy, "TEXTURES": kit.TEXTURES})
+    with open(a["script"], "r", encoding="utf-8") as f:
+        code = f.read()
+    log("Ejecutando el script de modelado (%d líneas)" % code.count("\n"))
+    exec(compile(code, "asset_script.py", "exec"), ns)
+    meshes = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    if not meshes:
+        raise RuntimeError("El script no creó ninguna malla")
+    for o in meshes:
+        kit.apply_mods(o)
+    # evita caras coplanares superpuestas (sombras negras en Cycles/Eevee):
+    # cada pieza grande se escala 1-4 mm alrededor de su centro
+    rnd = kit.random.Random(3)
+    for i, o in enumerate(meshes):
+        dims = o.dimensions
+        if max(dims) < 0.25:
+            continue
+        mw = o.matrix_world.copy()
+        center = sum((Vector(c) for c in o.bound_box), Vector()) / 8
+        k = 1.0 + (0.0005 + 0.0007 * (i % 7)) / max(0.5, max(dims))
+        o.data.transform(Matrix.Translation(center) @ Matrix.Scale(k, 4) @ Matrix.Translation(-center))
+    tris = sum(tri_count(o) for o in meshes)
+    log("Modelo: %d objetos, %d triángulos" % (len(meshes), tris))
+    files = []
+    p = os.path.join(out, "model.glb")
+    bpy.ops.export_scene.gltf(filepath=p, export_format="GLB", use_selection=False)
+    files.append("model.glb")
+    p = os.path.join(out, name + ".fbx")
+    bpy.ops.export_scene.fbx(filepath=p, use_selection=False, apply_scale_options="FBX_SCALE_ALL", axis_forward="-Z", axis_up="Y",
+                             path_mode="COPY", embed_textures=True, mesh_smooth_type="FACE", add_leaf_bones=False, bake_anim=False)
+    files.append(name + ".fbx")
+    scene = bpy.context.scene
+    studio_lights(scene, float(a.get("light", 1.0)))
+    frame_camera(scene, meshes, int(a.get("heroSize", 1024)), float(a.get("elevation", 28)), float(a.get("azimuth", -38)))
+    setup_render(scene, a, int(a.get("heroSize", 1024)))
+    scene.render.film_transparent = bool(a.get("transparent", True))
+    p = os.path.join(out, "render_hero.png")
+    scene.render.filepath = p
+    log("Renderizando vista hero…")
+    bpy.ops.render.render(write_still=True)
+    files.append("render_hero.png")
+    p = os.path.join(out, name + ".blend")
+    bpy.ops.wm.save_as_mainfile(filepath=p, compress=True)
+    files.append(name + ".blend")
+    return {"files": files, "triangles": tris, "objects": len(meshes)}
+
+
 def main():
     a = read_args()
     log("Blender %s" % bpy.app.version_string)
     try:
-        res = op_process(a) if a.get("op") == "process" else op_render(a)
+        op = a.get("op")
+        res = op_process(a) if op == "process" else op_build(a) if op == "build" else op_render(a)
         print("NVF_RESULT:" + json.dumps(res), flush=True)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print("NVF_ERROR:" + str(e), flush=True)
+        import traceback as _tb
+        tb = [l for l in _tb.format_exc().splitlines() if "asset_script.py" in l or "Error" in l][-4:]
+        print("NVF_ERROR:" + str(e) + (" || " + " | ".join(x.strip() for x in tb) if tb else ""), flush=True)
         sys.exit(1)
 
 
