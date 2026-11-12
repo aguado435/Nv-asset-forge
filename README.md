@@ -7,14 +7,26 @@
 - Sin instalar nada raro: solo Node.js. Blender es opcional pero recomendado.
 - Windows, macOS y Linux.
 
+![Aethermoor, continente JRPG en estilo cúbico 2D-HD](docs/img/world.jpg)
+
+| | |
+|---|---|
+| ![Plano de juego 2D-HD con personajes pixel art](docs/img/party.jpg) | ![El abismo y la ciudadela](docs/img/abyss.jpg) |
+| ![Zonas del continente](docs/img/zones.jpg) | ![Assets 2D generados con FLUX.2 en ~2 s](docs/img/flux2.jpg) |
+
+![Elenco de NPCs en pixel art real](docs/img/npcs.jpg)
+
+*Todo lo de esta página está generado con NV Asset Forge: texturas, fachadas y sprites con FLUX.2 (NVIDIA Build) y mundos montados y renderizados en Blender con los scripts de `examples/`.*
+
 ---
 
 ## Qué puede hacer
 
 | Función | Qué hace | Dónde se ejecuta |
 |---|---|---|
-| **Assets 2D** | Personajes, objetos, iconos, texturas repetibles, fondos, UI, efectos VFX y concept art | NVIDIA (FLUX, SD 3.5, Qwen-Image…) |
-| **Assets 3D** | Modelos `.glb` desde texto o desde un concept (★ mejor calidad) | NVIDIA (TRELLIS) |
+| **Assets 2D** | Personajes, objetos, iconos, texturas repetibles, fondos, UI, efectos VFX y concept art | NVIDIA (FLUX.2 klein, FLUX.1) |
+| **Modelos 3D pro en Blender** | Un LLM modela el asset con un kit de piezas, FLUX.2 pone las texturas y un modelo de visión lo revisa como director de arte | NVIDIA + Blender local |
+| **Assets 3D por IA** | Modelos `.glb` desde texto con TRELLIS (cuando el servicio de NVIDIA está activo) | NVIDIA (TRELLIS) |
 | **Elige tu modelo** | Cada usuario elige el modelo de imagen, de 3D y de LLM que quiera, o añade cualquier otro de build.nvidia.com por su ruta | — |
 | **Optimizar prompt** | Un LLM convierte tu idea en un prompt profesional de dirección de arte | NVIDIA o tu LLM local (FreeLLMAPI) |
 | **Colecciones de estilo** | Guía de estilo + imagen de referencia por proyecto para que todo el juego sea coherente | NVIDIA (FLUX Kontext) |
@@ -60,17 +72,21 @@ Se abre `http://localhost:7860`. Pega tu API key en **⚙ Ajustes** y genera tu 
 
 ## Modelos
 
-Se eligen en el panel izquierdo para cada generación, o por defecto en Ajustes.
+Se eligen en el panel izquierdo para cada generación, o por defecto en Ajustes. Comprobados con la API real de NVIDIA en noviembre de 2026:
 
-| Tipo | Modelos incluidos | Personalizado |
+| Tipo | Por defecto | Estado |
 |---|---|---|
-| Imagen | FLUX.1 dev, FLUX.1 schnell, Stable Diffusion 3.5 Large, Qwen-Image | Cualquier ruta `publisher/modelo` de build.nvidia.com |
-| Edición y estilo | FLUX.1 Kontext dev | — |
-| 3D | Microsoft TRELLIS | Cualquier ruta |
-| LLM (prompts) | Llama 3.3 70B por defecto; también Nemotron, DeepSeek, Mistral, GPT-OSS… | Cualquier modelo de chat de NVIDIA o tu servidor local compatible con OpenAI |
-| LLM (juegos) | Qwen3 Coder 480B por defecto | Cualquier modelo de chat |
+| Imagen | **FLUX.2 klein 4B** (~2 s por imagen, máx. 4 pasos) | ✅ funciona |
+| Imagen alternativa | FLUX.1 dev / schnell | ⚠️ a veces saturado (error 500) |
+| LLM de prompts | **Nemotron 3.5 Lightning 30B** | ✅ ~2 s |
+| LLM de código (Blender y juegos) | **MiniMax M3.1 flash** | ✅ (también Mistral Large 4, más lento) |
+| Visión (director de arte) | **Nemotron 3.5 Super VL** | ✅ ~5 s |
+| 3D por IA | TRELLIS | ⚠️ inestable en la nube; estable con NIM local |
+| Edición con imagen propia (Kontext, imagen→3D) | — | ❌ la nube gratuita solo acepta sus imágenes de ejemplo; usa NIM local |
 
-Si un modelo no acepta algún parámetro, la app reintenta automáticamente con los mínimos. Si un modelo de código no existe, usa el LLM general.
+Cualquier otro modelo de build.nvidia.com se puede añadir escribiendo su ruta en Ajustes. Si un modelo no acepta algún parámetro, la app reintenta con los mínimos; si un modelo de código no existe, usa el LLM general.
+
+**Lección aprendida:** el modelado 100 % autónomo por LLM todavía no da calidad de estudio de forma fiable. Lo que sí la da es una librería de **módulos diseñados** (como los de `examples/`) que el LLM compone y varía. Ese es el camino de la siguiente versión.
 
 ---
 
@@ -136,6 +152,18 @@ Ajustes → *LLM que optimiza los prompts* → **Local compatible OpenAI**. URL 
 ## Licencias de los modelos
 
 La API de NVIDIA Build es un servicio de prueba con límites de uso. Revisa la licencia de cada modelo antes de un uso comercial: **FLUX.1-dev y FLUX.1-Kontext-dev** piden licencia comercial a Black Forest Labs; **TRELLIS** es MIT; consulta la ficha de cada modelo en build.nvidia.com para los demás.
+
+## Ejemplos 2D-HD (Blender)
+
+Scripts listos para ejecutar con Blender 4.x / 5.x (`blender -b -P script.py -- opciones`):
+
+| Ejemplo | Qué es | Comando |
+|---|---|---|
+| `examples/world/build_world.py` | **Aethermoor**: continente JRPG de cubos con mar, playas, llanuras, bosque y Árbol del Mundo, desierto con pirámide, lago helado, cordillera, cuevas, castillo, fortaleza, islas flotantes y nubes | `--shot world\|fortress\|desert\|frost\|castle\|isles --res 1600x900` |
+| `examples/fortress/build_fortress.py` | Fortaleza modular en un abismo: muralla, torres, puerta, torreón, casas, rampa, estratos, cascada, arroyo; personajes pixel art; exporta cada módulo a GLB/FBX | `--shot hero\|gate\|keep\|party\|abyss --pixel --export-modules` |
+| `examples/diorama_2dhd/diorama_2dhd.py` | Diorama de fantasía oscura con 5 facciones, materiales pixel art PBR, billboards, tilt-shift f/1.8, volumen, AgX y Glare | `--engine CYCLES\|EEVEE --shot hero\|humans\|demons` |
+
+La técnica: **geometría low poly + imágenes FLUX muy detalladas encima** (fachadas con UV por cara, texturas tileables en proyección de caja) + shaders que fingen detalle (oclusión, desgaste en aristas, musgo en la base, hierba según la normal) + **sprites pixel art reales** (resolución nativa, paleta cerrada, interpolación Closest) + cámara de maqueta.
 
 ## Para desarrolladores
 
