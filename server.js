@@ -448,7 +448,7 @@ const SCENE_TYPES = {
   wall: 'wall 4 m wide (local X) × 3 m tall × 0.3 m thick, origin bottom-center', wallwin: 'same wall with an arched window', doorway: 'same wall with an arched door',
   floor: '4×4 m floor slab 0.2 m thick (put walls on top at y=0.2)', roof: 'gable roof 4.6 m wide (local X) × 4.4 m deep (local Z) × 1.8 m tall; for a 4×4 house rotate 90° in Y and place at y=3.2',
   house: 'MACRO: complete 4×4 m cottage (floor, walls with door facing local +Z and windows, gable roof). Optional "color" = walls, "roof" = roof color. Use r[1] to turn the door towards the path', tower: 'MACRO: 3-story stone watchtower 4×4 m with cone roof', pier: 'MACRO: wooden pier 2 m wide, extends along local -Z; s[2] = length multiplier (1 = 8 m)',
-  stairs: '2 m wide stairs rising 1.5 m along local +Z over 2.4 m', column: '3.1 m column', arch: '3.2 m wide × 3.2 m tall stone arch', fence: '4 m fence along local X', crate: '0.8 m crate', barrel: 'barrel 1 m tall',
+  stairs: '2 m wide stairs rising 1.5 m along local +Z over 2.4 m', column: '3.1 m column', arch: '3.2 m wide × 3.2 m tall stone arch', fence: '4 m fence along local X', crate: '0.8 m crate', barrel: 'barrel 1 m tall', lantern: 'street lantern 2.9 m tall with a warm lamp (lights up at dusk/night)',
   tree: 'deciduous tree ~4 m', pine: 'pine tree ~4 m', rock: 'rock ~1.2 m (scale freely)', bush: 'bush ~1 m', water: '6×6 m water plane (scale to make ponds/rivers)', plight: 'warm point light (lanterns, fires, windows at night)',
 };
 const SCENE_SYS = `You are a level designer composing a small 3D scene for a game from modular pieces, like assembling a diorama in Blender.
@@ -456,6 +456,11 @@ Units are meters, Y is up, the ground is y=0, X is right, Z is towards the camer
 Available piece types (use ONLY these): ${Object.entries(SCENE_TYPES).map(([k, v]) => `${k}: ${v}`).join('; ')}.
 Return ONLY JSON: {"name": short snake_case, "tod": "day"|"dawn"|"dusk"|"night", "ground": "grass"|"grid", "objs": [{"type": one of the types, "name": short label, "p": [x,y,z], "r": [rx,ry,rz] degrees, "s": [sx,sy,sz], "color": "#rrggbb" optional}]}.
 Prefer the MACRO pieces (house, tower, pier) for buildings: one house object = one complete cottage. Space houses at least 7 m apart, never put buildings on water; a pier starts on land and goes over a water plane.\nRules: build structures that actually connect (walls meet at corners on a 4 m grid, roofs sit on walls, floors under houses), keep paths walkable, use 15-70 objects, vary scale and rotation of nature pieces so it does not look repeated, use believable colors, add point lights at doors/lamps when it is dusk or night. Keep everything within about 40×40 m around the origin.
+ART DIRECTION (mandatory):
+- Never align trees or rocks in straight rows or grids: group nature in organic clusters of 3-5 pieces of different sizes, with clearings between clusters.
+- Every tree, pine, bush and rock gets a random Y rotation between 0 and 360 degrees and a scale between 0.75 and 1.35 (vary X/Z slightly from Y).
+- Micro-storytelling: a pier gets a lantern at its far end and a small group of barrels and crates at its base; houses get slightly different angles (±15°), are connected by fences or a path of floor slabs, and have a lantern or barrel near the door.
+- Leave walkable space between buildings; make one clear focal point (the biggest building or the pier).
 NEVER assemble buildings from floor/wall/roof pieces: always one "house" or "tower" object per building (walls are only for town walls, ruins or fences). Water planes: scale at most 3 (18 m), place them beside the village, not under it.
 Example for "two cottages by a pond at night":
 {"name":"pond_cottages","tod":"night","ground":"grass","objs":[{"type":"house","name":"cottage_a","p":[-5,0,0],"r":[0,20,0],"s":[1,1,1],"color":"#d9cbb0","roof":"#7a3326"},{"type":"house","name":"cottage_b","p":[5,0,-1],"r":[0,-15,0],"s":[1,1,1],"color":"#cfc2a8","roof":"#4a5a6a"},{"type":"water","name":"pond","p":[0,0,9],"r":[0,0,0],"s":[1.4,1,1],"color":"#2f6f8f"},{"type":"plight","name":"door_lamp_a","p":[-4.3,2.2,2.6],"r":[0,0,0],"s":[1,1,1],"color":"#ffb866"},{"type":"plight","name":"door_lamp_b","p":[5.5,2.2,1.6],"r":[0,0,0],"s":[1,1,1],"color":"#ffb866"},{"type":"pine","name":"pine","p":[-11,0,-6],"r":[0,40,0],"s":[1.2,1.3,1.2]},{"type":"tree","name":"oak","p":[10,0,-7],"r":[0,0,0],"s":[1.1,1.1,1.1]},{"type":"rock","name":"rock","p":[3,0,6],"r":[0,70,0],"s":[0.8,0.6,0.8]},{"type":"bush","name":"bush","p":[-2,0,4],"r":[0,0,0],"s":[1,1,1]}]}`;
@@ -488,6 +493,13 @@ async function designScene(cfg, prompt, current) {
     }
     if (!moved) break;
   }
+  for (const o of raw.filter((x) => x.type === 'pier')) {
+    const len = 8 * (o.s[2] || 1), ry = (o.r[1] * Math.PI) / 180;
+    const mx = o.p[0] - Math.sin(ry) * len * 0.6, mz = o.p[2] - Math.cos(ry) * len * 0.6; // el agua debe cubrir el tramo exterior del muelle
+    const covers = (w) => { const r2 = (w.r[1] * Math.PI) / 180, c = Math.cos(r2), sn = Math.sin(r2), dx = mx - w.p[0], dz = mz - w.p[2]; return Math.abs(dx * c - dz * sn) < 3 * (w.s[0] || 1) && Math.abs(dx * sn + dz * c) < 3 * (w.s[2] || 1); };
+    if (raw.some((w) => w.type === 'water' && covers(w))) continue;
+    raw.push({ type: 'water', name: 'agua', p: [o.p[0] - Math.sin(ry) * len * 0.75, 0, o.p[2] - Math.cos(ry) * len * 0.75], r: [0, o.r[1], 0], s: [Math.max(3, len / 3), 1, Math.max(2, len / 3)] });
+  }
   for (const w of raw.filter((x) => x.type === 'water')) { // los edificios no se construyen sobre el agua
     const pad = 2.5, hx = 3 * (w.s[0] || 1) + pad, hz = 3 * (w.s[2] || 1) + pad, ry = (w.r[1] * Math.PI) / 180, c = Math.cos(ry), sn = Math.sin(ry);
     for (const b of raw.filter((x) => !['water', 'pier', 'plight', 'plane'].includes(x.type))) {
@@ -498,10 +510,26 @@ async function designScene(cfg, prompt, current) {
       }
     }
   }
+
+  // dirección de arte garantizada aunque el LLM no la cumpla: variación natural y escenas con historia
+  let sd = 987654; const rnd = () => ((sd = (sd * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const NATURE = ['tree', 'pine', 'bush', 'rock'];
+  const nat = raw.filter((o) => NATURE.includes(o.type));
+  const uniformRot = nat.length > 2 && new Set(nat.map((o) => Math.round(o.r[1]))).size <= 2;
+  const uniformScl = nat.length > 2 && new Set(nat.map((o) => o.s[1].toFixed(2))).size <= 2;
+  for (const o of nat) {
+    if (uniformRot || o.r[1] === 0) o.r[1] = Math.round(rnd() * 360);
+    if (uniformScl || (o.s[0] === 1 && o.s[1] === 1 && o.s[2] === 1)) { const k = 0.75 + rnd() * 0.6; o.s = [k * (0.92 + rnd() * 0.16), k, k * (0.92 + rnd() * 0.16)]; }
+    o.p[0] += (rnd() - 0.5) * 0.8; o.p[2] += (rnd() - 0.5) * 0.8; // rompe filas perfectas
+  }
+  for (const o of raw.filter((x) => ['lantern', 'barrel', 'crate', 'tree', 'pine', 'bush', 'rock', 'house', 'tower', 'fence'].includes(x.type))) o.p[1] = 0; // nada flota: al suelo (los del muelle se añaden después)
   for (const o of raw.filter((x) => x.type === 'pier')) {
-    if (raw.some((w) => w.type === 'water' && Math.hypot(w.p[0] - o.p[0], w.p[2] - o.p[2]) < 12)) continue;
-    const len = 8 * (o.s[2] || 1), ry = (o.r[1] * Math.PI) / 180;
-    raw.push({ type: 'water', name: 'agua', p: [o.p[0] - Math.sin(ry) * len * 0.75, 0, o.p[2] - Math.cos(ry) * len * 0.75], r: [0, o.r[1], 0], s: [Math.max(3, len / 3), 1, Math.max(2, len / 3)] });
+    const len = 8 * (o.s[2] || 1), ry = (o.r[1] * Math.PI) / 180, fx = -Math.sin(ry), fz = -Math.cos(ry), sx = Math.cos(ry), sz = -Math.sin(ry);
+    const near = (t, x, z, r) => raw.some((q) => q.type === t && Math.hypot(q.p[0] - x, q.p[2] - z) < r);
+    const ex = o.p[0] + fx * (len - 0.6) + sx * 0.8, ez = o.p[2] + fz * (len - 0.6) + sz * 0.8;
+    if (!near('lantern', ex, ez, 2.5)) raw.push({ type: 'lantern', name: 'farol del muelle', p: [ex, 0.68, ez], r: [0, 0, 0], s: [1, 1, 1] });
+    const bx = o.p[0] - fx * 1.2 + sx * 1.8, bz = o.p[2] - fz * 1.2 + sz * 1.8;
+    if (!near('barrel', bx, bz, 3)) { raw.push({ type: 'barrel', name: 'barril', p: [bx, 0, bz], r: [0, 0, 0], s: [1, 1, 1] }, { type: 'barrel', name: 'barril', p: [bx + 0.75, 0, bz + 0.3], r: [0, 40, 0], s: [0.95, 0.95, 0.95] }, { type: 'crate', name: 'caja', p: [bx + 0.2, 0, bz - 0.9], r: [0, 18, 0], s: [1, 1, 1] }); }
   }
   const objs = raw.flatMap(expandMacro).map((o) => ({ type: o.type, name: o.name, p: o.p.map((v) => +v.toFixed(3)), r: o.r.map((d) => +((d * Math.PI) / 180).toFixed(4)), s: o.s, color: o.color }));
   if (!objs.length) throw new Error('El LLM no devolvió piezas válidas.');

@@ -268,78 +268,148 @@ class MapPainter {
   toJSON() { return JSON.stringify({ cols: this.cols, rows: this.rows, tile: this.T, corners: Array.from(this.V) }); }
 }
 
-// ───────── Pixel art de verdad (v2): color dominante por bloque, limpieza, contorno y paletas clásicas ─────────
+// ───────── Pixel art de verdad (v3, técnicas tipo Aseprite / PixelOver) ─────────
+// · Muestreo por celda dominante (moda de color por bloque) con alfa binario estricto: nada de píxeles semitransparentes ni colores borrosos.
+// · Cuantización en OKLab (perceptual): la piel y las sombras conservan su tono.
+// · Contorno SOLO en la silueta exterior (píxeles opacos que tocan transparencia): ojos, caras y detalles internos quedan intactos.
+// · Dithering ordenado Bayer 2×2 suave (25 % por defecto) solo entre tonos vecinos, para que curvas y metales tengan textura sin manchas.
+// · Sprite sheets: la paleta "auto" se calcula sobre todos los fotogramas a la vez y cada fotograma se reduce por separado (sin parpadeos ni sangrado entre fotogramas).
 const PALETTES = {
   pico8: ['000000', '1d2b53', '7e2553', '008751', 'ab5236', '5f574f', 'c2c3c7', 'fff1e8', 'ff004d', 'ffa300', 'ffec27', '00e436', '29adff', '83769c', 'ff77a8', 'ffccaa'],
   sweetie16: ['1a1c2c', '5d275d', 'b13e53', 'ef7d57', 'ffcd75', 'a7f070', '38b764', '257179', '29366f', '3b5dc9', '41a6f6', '73eff7', 'f4f4f4', '94b0c2', '566c86', '333c57'],
   endesga32: ['be4a2f', 'd77643', 'ead4aa', 'e4a672', 'b86f50', '733e39', '3e2731', 'a22633', 'e43b44', 'f77622', 'feae34', 'fee761', '63c74d', '3e8948', '265c42', '193c3e', '124e89', '0099db', '2ce8f5', 'ffffff', 'c0cbdc', '8b9bb4', '5a6988', '3a4466', '262b44', '181425', 'ff0044', '68386c', 'b55088', 'f6757a', 'e8b796', 'c28569'],
 };
 const hexRgb = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-function colorDist(a, b) { const rm = (a[0] + b[0]) / 2, dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2]; return (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db; }
-function nearestIdx(pal, c) { let m = Infinity, bi = 0; for (let i = 0; i < pal.length; i++) { const d = colorDist(pal[i], c); if (d < m) { m = d; bi = i; } } return bi; }
+// ── OKLab ──
+const _lin = new Float32Array(256); for (let i = 0; i < 256; i++) { const c = i / 255; _lin[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function rgbToOklab(r, g, b) {
+  const R = _lin[r | 0], G = _lin[g | 0], B = _lin[b | 0];
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B), m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B), s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function oklabToRgb(L, A, B_) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B_) ** 3, m = (L - 0.1055613458 * A - 0.0638541728 * B_) ** 3, s = (L - 0.0894841775 * A - 1.291485548 * B_) ** 3;
+  const f = (v) => { v = Math.max(0, Math.min(1, v)); return Math.round((v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) * 255); };
+  return [f(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s), f(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s), f(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)];
+}
+const labD2 = (a, b) => { const dl = a[0] - b[0], da = a[1] - b[1], db = a[2] - b[2]; return dl * dl + da * da + db * db; };
 const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-// opts: { height | width, colors, palette: 'auto'|'pico8'|'sweetie16'|'endesga32'|[[r,g,b]…], outline: 'none'|'selout'|'black', cleanup: true, boost: 1.12 }
-function pixelArt(src, opts = {}) {
-  const W = src.width, H = src.height;
-  const d = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
-  let tw = opts.width, th = opts.height;
-  if (tw && !th) th = Math.max(1, Math.round(H * tw / W)); else if (th && !tw) tw = Math.max(1, Math.round(W * th / H)); else if (!tw) { tw = 64; th = Math.round(H * 64 / W); }
-  const boost = opts.boost ?? 1.12;
-  const px = (i) => { // color con un poco más de saturación y contraste: el pixel art lee mejor con colores decididos
-    let r = d[i], g = d[i + 1], b = d[i + 2]; const l = lum([r, g, b]);
-    r = l + (r - l) * boost; g = l + (g - l) * boost; b = l + (b - l) * boost;
-    const k = (v) => Math.max(0, Math.min(255, 128 + (v - 128) * (1 + (boost - 1) * 0.6))); return [k(r), k(g), k(b)];
-  };
-  // 1) paleta
-  let pal;
-  if (Array.isArray(opts.palette)) pal = opts.palette;
-  else if (PALETTES[opts.palette]) pal = PALETTES[opts.palette].map(hexRgb);
-  else {
-    const S = []; const step = Math.max(1, Math.floor((W * H) / 60000));
-    for (let p = 0; p < W * H; p += step) { const i = p * 4; if (d[i + 3] > 160) S.push(...px(i)); }
-    pal = kmeans(S, Math.max(2, Math.min(64, opts.colors || 16)));
+// k-means en OKLab con inicialización k-means++ (determinista)
+function kmeansLab(S, k) {
+  const n = S.length; if (!n) return [];
+  k = Math.min(k, n); let seed = 12345; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const C = [S[Math.floor(rnd() * n)].slice()]; const D = new Float32Array(n).fill(Infinity);
+  while (C.length < k) {
+    let sum = 0; const last = C[C.length - 1]; for (let i = 0; i < n; i++) { const d = labD2(S[i], last); if (d < D[i]) D[i] = d; sum += D[i]; }
+    let t = rnd() * sum, i = 0; for (; i < n - 1; i++) { t -= D[i]; if (t <= 0) break; } C.push(S[i].slice());
   }
-  if (!pal.length) pal = [[0, 0, 0]];
-  const darkRank = pal.map((c) => 1 - lum(c) / 255);
-  // 2) color dominante por bloque (no la media: así no hay colores sucios)
-  const out = new Int16Array(tw * th).fill(-1);
-  const bw = W / tw, bh = H / th, sx = Math.max(1, Math.floor(bw / 6)), sy = Math.max(1, Math.floor(bh / 6));
-  const cnt = new Float32Array(pal.length);
+  const asg = new Int32Array(n);
+  for (let it = 0; it < 14; it++) {
+    const acc = C.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i++) { let bd = Infinity, bi = 0; for (let c = 0; c < C.length; c++) { const d = labD2(S[i], C[c]); if (d < bd) { bd = d; bi = c; } } asg[i] = bi; const a = acc[bi]; a[0] += S[i][0]; a[1] += S[i][1]; a[2] += S[i][2]; a[3]++; }
+    acc.forEach((a, c) => { if (a[3]) C[c] = [a[0] / a[3], a[1] / a[3], a[2] / a[3]]; });
+  }
+  return C;
+}
+const BAYER2 = [[0.125, 0.625], [0.875, 0.375]];
+function pixelData(src) { return src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, src.width, src.height).data; }
+// Paleta en OKLab a partir de opciones (preset, lista RGB o "auto" sobre un conjunto de lienzos/regiones)
+function buildPaletteLab(sources, opts) {
+  if (Array.isArray(opts.palette)) return opts.palette.map((c) => rgbToOklab(...c));
+  if (PALETTES[opts.palette]) return PALETTES[opts.palette].map((h) => rgbToOklab(...hexRgb(h)));
+  const S = []; let total = 0; for (const { d, w, h } of sources) total += w * h;
+  const step = Math.max(1, Math.floor(total / 70000));
+  for (const { d, w, h } of sources) for (let p = 0; p < w * h; p += step) { const i = p * 4; if (d[i + 3] > 128) S.push(rgbToOklab(d[i], d[i + 1], d[i + 2])); }
+  return kmeansLab(S, Math.max(2, Math.min(64, opts.colors || 16)));
+}
+// Reduce una región (x0,y0,W,H) de los datos a tw×th con la paleta dada. Devuelve índices (−1 = transparente).
+function reduceRegion(d, stride, x0, y0, W, H, tw, th, palLab, opts) {
+  const cache = new Map(); const nearest = (r, g, b) => { const key = (r >> 2) << 12 | (g >> 2) << 6 | (b >> 2); let v = cache.get(key); if (v !== undefined) return v; const L = rgbToOklab(r, g, b); let bd = Infinity; v = 0; for (let c = 0; c < palLab.length; c++) { const dd = labD2(L, palLab[c]); if (dd < bd) { bd = dd; v = c; } } cache.set(key, v); return v; };
+  const out = new Int16Array(tw * th).fill(-1), alt = new Int16Array(tw * th).fill(-1), ratio = new Float32Array(tw * th);
+  const bw = W / tw, bh = H / th, sx = Math.max(1, Math.floor(bw / 7)), sy = Math.max(1, Math.floor(bh / 7)); const cnt = new Float32Array(palLab.length);
   for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
-    cnt.fill(0); let op = 0, tot = 0;
-    const x0 = Math.floor(x * bw), x1 = Math.max(x0 + 1, Math.floor((x + 1) * bw)), y0 = Math.floor(y * bh), y1 = Math.max(y0 + 1, Math.floor((y + 1) * bh));
-    for (let yy = y0; yy < y1; yy += sy) for (let xx = x0; xx < x1; xx += sx) {
-      const i = (yy * W + xx) * 4; tot++; if (d[i + 3] < 128) continue; op++;
-      const k = nearestIdx(pal, px(i)); cnt[k] += darkRank[k] > 0.82 ? 1.25 : 1; // las líneas muy oscuras pesan algo más para no perder el lineart
-    }
-    if (op * 2 < tot) continue;
-    let best = 0; for (let k = 1; k < pal.length; k++) if (cnt[k] > cnt[best]) best = k; out[y * tw + x] = best;
+    const ax0 = x0 + Math.floor(x * bw), ax1 = x0 + Math.max(Math.floor(x * bw) + 1, Math.floor((x + 1) * bw)), ay0 = y0 + Math.floor(y * bh), ay1 = y0 + Math.max(Math.floor(y * bh) + 1, Math.floor((y + 1) * bh));
+    cnt.fill(0); let asum = 0, tot = 0, op = 0;
+    for (let yy = ay0; yy < ay1; yy += sy) for (let xx = ax0; xx < ax1; xx += sx) { const i = (yy * stride + xx) * 4; tot++; asum += d[i + 3]; if (d[i + 3] <= 128) continue; op++; cnt[nearest(d[i], d[i + 1], d[i + 2])]++; }
+    if (asum / tot <= 128) continue; // alfa estricto: la celda es opaca solo si su alfa medio supera 128
+    let a = 0, b = -1; for (let c = 1; c < cnt.length; c++) if (cnt[c] > cnt[a]) a = c;
+    for (let c = 0; c < cnt.length; c++) if (c !== a && cnt[c] > 0 && (b < 0 || cnt[c] > cnt[b])) b = c;
+    out[y * tw + x] = a; if (b >= 0) { alt[y * tw + x] = b; ratio[y * tw + x] = cnt[b] / (cnt[a] + cnt[b]); }
   }
-  // 3) limpieza: motas sueltas de alfa y píxeles huérfanos de color
+  // dithering Bayer 2×2 suave: solo entre la moda y el segundo color de la celda, y solo si son tonos vecinos
+  const dither = opts.dither ?? 0.25;
+  if (dither > 0) for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+    const k = y * tw + x, b = alt[k]; if (out[k] < 0 || b < 0) continue;
+    if (labD2(palLab[out[k]], palLab[b]) > 0.2 * 0.2) continue;
+    if (ratio[k] * Math.min(1, dither * 2) > BAYER2[y & 1][x & 1]) out[k] = b;
+  }
+  // limpieza conservadora: motas de alfa aisladas y píxeles huérfanos casi del mismo tono (los brillos de ojos y detalles con contraste se respetan)
   if (opts.cleanup !== false) {
     const at = (x, y) => (x < 0 || y < 0 || x >= tw || y >= th ? -1 : out[y * tw + x]);
-    for (let pass = 0; pass < 2; pass++) for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
-      const v = out[y * tw + x]; const nb = [at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)];
-      if (v >= 0 && nb.filter((n) => n >= 0).length <= 1) { out[y * tw + x] = -1; continue; }
-      if (v < 0 || nb.some((n) => n < 0) || nb.includes(v)) continue;
-      const f = {}; let bn = nb[0]; for (const n of nb) { f[n] = (f[n] || 0) + 1; if (f[n] > f[bn]) bn = n; } if (f[bn] >= 2) out[y * tw + x] = bn;
+    for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+      const v = out[y * tw + x]; if (v < 0) continue; const nb = [at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)];
+      if (nb.filter((n) => n >= 0).length === 0) { out[y * tw + x] = -1; continue; }
+      if (nb.some((n) => n < 0) || nb.includes(v)) continue;
+      const f = {}; let bn = nb[0]; for (const n of nb) { f[n] = (f[n] || 0) + 1; if (f[n] > f[bn]) bn = n; }
+      if (f[bn] >= 3 && labD2(palLab[v], palLab[bn]) < 0.06 * 0.06) out[y * tw + x] = bn;
     }
   }
-  // 4) contorno exterior de 1 px (lienzo +1 px por lado)
-  const ol = opts.outline || 'none', pad = ol === 'none' ? 0 : 1, OW = tw + pad * 2, OH = th + pad * 2;
-  const c = document.createElement('canvas'); c.width = OW; c.height = OH; const cx = c.getContext('2d'); const id = cx.createImageData(OW, OH), o = id.data;
-  const put = (x, y, col) => { const i = (y * OW + x) * 4; o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; o[i + 3] = 255; };
-  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) { const v = out[y * tw + x]; if (v >= 0) put(x + pad, y + pad, pal[v]); }
-  if (pad) {
-    const darkest = pal.reduce((a, b) => (lum(b) < lum(a) ? b : a));
-    const inside = (x, y) => x >= 0 && y >= 0 && x < tw && y < th && out[y * tw + x] >= 0;
-    for (let y = -1; y <= th; y++) for (let x = -1; x <= tw; x++) {
-      if (inside(x, y)) continue;
-      const nbs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => inside(x + dx, y + dy)); if (!nbs.length) continue;
-      let col = darkest;
-      if (ol === 'selout') { const [dx, dy] = nbs[0]; const n = pal[out[(y + dy) * tw + x + dx]]; col = pal[nearestIdx(pal, n.map((v) => v * 0.42))]; if (lum(col) > lum(n) * 0.75) col = darkest; }
-      put(x + pad, y + pad, col);
-    }
+  return out;
+}
+// Contorno solo en la silueta: se recolorean los píxeles OPACOS que tocan un píxel transparente (o el borde del lienzo).
+function outlineSilhouette(out, tw, th, palLab, mode) {
+  if (!mode || mode === 'none') return out;
+  const o = out.slice(); const trans = (x, y) => x < 0 || y < 0 || x >= tw || y >= th || out[y * tw + x] < 0;
+  let dark = 0; for (let c = 1; c < palLab.length; c++) if (palLab[c][0] < palLab[dark][0]) dark = c;
+  const shadeOf = new Int16Array(palLab.length); // sel-out: el tono más parecido de la paleta, claramente más oscuro
+  for (let c = 0; c < palLab.length; c++) {
+    const t = palLab[c]; const want = [t[0] * 0.55, t[1] * 1.05, t[2] * 1.05]; let best = dark, bd = Infinity;
+    for (let k = 0; k < palLab.length; k++) { if (palLab[k][0] > t[0] - 0.08) continue; const dd = labD2(palLab[k], want); if (dd < bd) { bd = dd; best = k; } }
+    shadeOf[c] = best;
   }
-  cx.putImageData(id, 0, 0); c.palette = pal; return c;
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+    const v = out[y * tw + x]; if (v < 0) continue;
+    if (!(trans(x + 1, y) || trans(x - 1, y) || trans(x, y + 1) || trans(x, y - 1))) continue;
+    o[y * tw + x] = mode === 'black' ? dark : shadeOf[v];
+  }
+  return o;
+}
+function paintIndices(ctx, out, tw, th, palRgb, ox = 0, oy = 0) {
+  const id = ctx.createImageData(tw, th), o = id.data;
+  for (let k = 0; k < tw * th; k++) { const v = out[k]; if (v < 0) continue; const c = palRgb[v]; o[k * 4] = c[0]; o[k * 4 + 1] = c[1]; o[k * 4 + 2] = c[2]; o[k * 4 + 3] = 255; }
+  ctx.putImageData(id, ox, oy);
+}
+function targetSize(W, H, opts) {
+  let tw = opts.width, th = opts.height;
+  if (tw && !th) th = Math.max(1, Math.round(H * tw / W)); else if (th && !tw) tw = Math.max(1, Math.round(W * th / H)); else if (!tw) { tw = 64; th = Math.max(1, Math.round(H * 64 / W)); }
+  return [Math.max(1, Math.min(1024, tw)), Math.max(1, Math.min(1024, th))];
+}
+// opts: { height | width, colors, palette: 'auto'|'pico8'|'sweetie16'|'endesga32'|[[r,g,b]…], outline: 'none'|'selout'|'black', dither: 0..1 (0.25), cleanup: true }
+function pixelArt(src, opts = {}) {
+  const W = src.width, H = src.height, d = pixelData(src);
+  const palLab = buildPaletteLab([{ d, w: W, h: H }], opts); if (!palLab.length) palLab.push([0, 0, 0]);
+  const palRgb = palLab.map((c) => oklabToRgb(...c));
+  const [tw, th] = targetSize(W, H, opts);
+  const idx = outlineSilhouette(reduceRegion(d, W, 0, 0, W, H, tw, th, palLab, opts), tw, th, palLab, opts.outline || 'selout');
+  const c = document.createElement('canvas'); c.width = tw; c.height = th; paintIndices(c.getContext('2d'), idx, tw, th, palRgb); c.palette = palRgb; return c;
+}
+// Sprite sheet en rejilla (cols × rows): paleta común calculada sobre la hoja entera y cada fotograma reducido por separado al mismo tamaño.
+function pixelArtSheet(src, cols, rows, opts = {}) {
+  const W = src.width, H = src.height, d = pixelData(src), fw = Math.floor(W / cols), fh = Math.floor(H / rows);
+  const palLab = buildPaletteLab([{ d, w: W, h: H }], opts); if (!palLab.length) palLab.push([0, 0, 0]);
+  const palRgb = palLab.map((c) => oklabToRgb(...c));
+  const [tw, th] = targetSize(fw, fh, opts);
+  const c = document.createElement('canvas'); c.width = tw * cols; c.height = th * rows; const ctx = c.getContext('2d');
+  for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
+    const idx = outlineSilhouette(reduceRegion(d, W, q * fw, r * fh, fw, fh, tw, th, palLab, opts), tw, th, palLab, opts.outline || 'selout');
+    paintIndices(ctx, idx, tw, th, palRgb, q * tw, r * th);
+  }
+  c.palette = palRgb; return c;
+}
+// Varios fotogramas sueltos (lienzos) con una única paleta: devuelve los lienzos reducidos.
+function pixelArtFrames(frames, opts = {}) {
+  const src = frames.map((f) => ({ d: pixelData(f), w: f.width, h: f.height }));
+  const palLab = buildPaletteLab(src, opts); if (!palLab.length) palLab.push([0, 0, 0]);
+  const palRgb = palLab.map((c) => oklabToRgb(...c));
+  return src.map(({ d, w, h }) => { const [tw, th] = targetSize(w, h, opts); const idx = outlineSilhouette(reduceRegion(d, w, 0, 0, w, h, tw, th, palLab, opts), tw, th, palLab, opts.outline || 'selout'); const c = document.createElement('canvas'); c.width = tw; c.height = th; paintIndices(c.getContext('2d'), idx, tw, th, palRgb); c.palette = palRgb; return c; });
 }

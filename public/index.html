@@ -297,7 +297,7 @@ details.sec summary::-webkit-details-marker{display:none}
     <!-- Herramientas 2D (locales) -->
     <div class="tools" id="tools2d">
       <div class="tg"><span>Fondo</span><input type="range" id="tol" min="5" max="120" value="38" title="Tolerancia"><button class="btn sm" id="tRemove">Quitar fondo</button><button class="btn sm" id="tCrop">Recortar</button></div>
-      <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><select id="pxPal" title="Paleta"><option value="auto">Paleta auto</option><option value="pico8">PICO-8</option><option value="sweetie16">Sweetie 16</option><option value="endesga32">Endesga 32</option></select><select id="pxOut" title="Contorno"><option value="selout">Contorno selectivo</option><option value="black">Contorno oscuro</option><option value="none">Sin contorno</option></select><button class="btn sm" id="tPixel">Pixelar</button></div>
+      <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><select id="pxPal" title="Paleta"><option value="auto">Paleta auto</option><option value="pico8">PICO-8</option><option value="sweetie16">Sweetie 16</option><option value="endesga32">Endesga 32</option></select><label class="chk" title="Dithering Bayer 2×2 suave (25 %)" style="margin:0;font-size:12px"><input type="checkbox" id="pxDit" checked> Dither</label><select id="pxOut" title="Contorno"><option value="selout">Contorno selectivo (silueta)</option><option value="black">Contorno oscuro (silueta)</option><option value="none">Sin contorno</option></select><button class="btn sm" id="tPixel">Pixelar</button></div>
       <div class="tg"><span>Tile</span><button class="btn sm" id="tSeam">Hacer tileable</button><button class="btn sm" id="tTile">Ver mosaico</button></div>
       <div class="tg" id="tsGroup"><span>Tileset</span><select id="tsB" title="Segundo terreno (textura de la biblioteca)"></select><select id="tsT" title="Tamaño de tile"><option>16</option><option selected>32</option><option>48</option><option>64</option><option>128</option></select><select id="tsMode"><option value="pixel">Pixel + contorno</option><option value="soft">Suave HD</option></select><button class="btn sm pri" id="tTileset">Crear autotile</button><button class="btn sm" id="tPaint" style="display:none">🖌 Pintar mapa</button></div>
       <div class="tg"><span>Luz 2D</span><button class="btn sm" id="tNormal" title="Normal map para iluminación 2D (Godot, Unity) con vista previa de luz">Normal map + luz</button></div>
@@ -357,12 +357,13 @@ details.sec summary::-webkit-details-marker{display:none}
     <div id="provNv"><label for="sLlm">Modelo LLM de NVIDIA</label><input type="text" id="sLlm" list="llmList"></div>
     <datalist id="llmList"></datalist>
     <div id="provLocal">
+      <div style="display:flex;gap:8px;margin:6px 0 2px"><button class="btn sm" type="button" id="prOmni" title="npm install -g omniroute · omniroute">OmniRoute (:20128)</button><button class="btn sm" type="button" id="prFree" title="FreeLLMAPI">FreeLLMAPI (:31415)</button></div>
       <div class="row">
         <div><label for="sLu">URL base</label><input type="text" id="sLu" placeholder="http://localhost:31415/v1"></div>
         <div><label for="sLm">Modelo</label><input type="text" id="sLm" placeholder="auto"></div>
       </div>
       <label for="sLk">API key del router local (si la pide)</label><input type="password" id="sLk">
-      <div class="hint">Abre FreeLLMAPI, copia su URL y su clave. Si no responde, la app usa automáticamente el LLM de NVIDIA. Imagen y 3D siempre van con NVIDIA.</div>
+      <div class="hint">Router local compatible con OpenAI. <b>OmniRoute</b>: <code>npm install -g omniroute</code>, ejecuta <code>omniroute</code>, conecta tus proveedores y crea una API key en su panel (http://localhost:20128). <b>FreeLLMAPI</b>: copia su URL y su clave. Si el router no responde, la app usa automáticamente el LLM de NVIDIA. Imagen y 3D siempre van con NVIDIA.</div>
     </div>
     <div class="sep"></div>
     <p><b>Dónde se ejecutan los modelos.</b> “Nube” usa build.nvidia.com. “NIM local” usa un contenedor NVIDIA NIM en tu propio PC (GPU RTX con Docker/WSL); sin límites ni colas.</p>
@@ -495,6 +496,8 @@ async function saveSettings() {
   await post('/api/config', { apiKey: $('#sKey').value, llmModel: $('#sLlm').value, llmProvider: $('#sProv').value, llmLocalUrl: $('#sLu').value, llmLocalModel: $('#sLm').value, llmLocalKey: $('#sLk').value, imageModel: $('#sImg').value, backend2d: $('#sB2').value, backend3d: $('#sB3').value, local2dUrl: $('#sL2').value, local3dUrl: $('#sL3').value, libraryPath: $('#sLib').value, project: $('#project').value, model3d: $('#sM3d').value, customImagePath: $('#sCImg').value, custom3dPath: $('#sC3d').value, codeModel: $('#sCode').value, visionModel: $('#sVis').value, blenderPath: $('#sBl').value });
   await loadConfig(); await loadLibrary(); checkBlender(true);
 }
+$('#prOmni').onclick = () => { $('#sLu').value = 'http://localhost:20128/v1'; if (!$('#sLm').value) $('#sLm').value = 'auto'; toast('OmniRoute: pega la API key que creas en su panel y prueba la conexión'); };
+$('#prFree').onclick = () => { $('#sLu').value = 'http://localhost:31415/v1'; if (!$('#sLm').value) $('#sLm').value = 'auto'; };
 function provToggle() { const l = $('#sProv').value === 'local'; $('#provLocal').style.display = l ? 'block' : 'none'; $('#provNv').style.display = l ? 'none' : 'block'; }
 $('#sProv').onchange = provToggle;
 $('#sBlTest').onclick = async () => {
@@ -770,7 +773,12 @@ function resizePOT(target) {
 function updateTile() { const url = cv.toDataURL(); const t = $('#tile'); t.style.backgroundImage = `url(${url})`; const s = Math.min(t.clientWidth, t.clientHeight) / 3; t.style.backgroundSize = `${s}px ${s * cv.height / cv.width}px`; t.style.imageRendering = cv.width <= 512 ? 'pixelated' : 'auto'; }
 $('#tRemove').onclick = () => op(() => removeBg(+$('#tol').value, cv));
 $('#tCrop').onclick = () => op(() => autoCrop());
-$('#tPixel').onclick = () => op(() => setFrom(pixelArt(cv, { width: Math.max(8, Math.min(512, +$('#pxW').value || 64)), colors: Math.max(2, Math.min(64, +$('#pxC').value || 16)), palette: $('#pxPal').value, outline: $('#pxOut').value })));
+$('#tPixel').onclick = () => op(() => {
+  const o = { width: Math.max(8, Math.min(512, +$('#pxW').value || 64)), colors: Math.max(2, Math.min(64, +$('#pxC').value || 16)), palette: $('#pxPal').value, outline: $('#pxOut').value, dither: $('#pxDit').checked ? 0.25 : 0 };
+  const sh = (CURFILE || '').match(/_sheet_(\d+)x(\d+)_n(\d+)\.png$/i); // sprite sheet: paleta común y cada fotograma por separado
+  if (sh && cv.width >= +sh[1] * +sh[3] * 0.9) { const cols = Math.max(1, Math.round(cv.width / +sh[1])), rows = Math.max(1, Math.round(cv.height / +sh[2])); setFrom(pixelArtSheet(cv, cols, rows, o)); // «Ancho» = ancho de cada fotograma toast(`Sprite sheet: ${cols * rows} fotogramas con una sola paleta`); }
+  else setFrom(pixelArt(cv, o));
+});
 $('#tSeam').onclick = () => op(makeSeamless);
 $('#tResize').onclick = () => op(() => resizePOT(+$('#potSel').value));
 $('#tTile').onclick = () => { const on = $('#tile').style.display !== 'block'; if (on) { showView('tile'); updateTile(); $('#tTile').textContent = 'Ver imagen'; } else { showView('v2d'); $('#tTile').textContent = 'Ver mosaico'; } };
