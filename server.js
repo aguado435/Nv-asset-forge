@@ -283,8 +283,8 @@ async function chatOnce(cfg, messages, max_tokens, nvModel) {
 }
 const llmLabel = (cfg) => (cfg.llmProvider === 'local' ? `LLM local (${cfg.llmLocalModel || 'auto'})` : cfg.llmModel);
 
-async function llmJSON(cfg, system, user, max_tokens = 2000) {
-  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens);
+async function llmJSON(cfg, system, user, max_tokens = 2000, nvModel) {
+  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens, nvModel);
   let txt = j.choices?.[0]?.message?.content || '';
   txt = txt.replace(/<think>[\s\S]*?<\/think>/g, '');
   const s = txt.indexOf('{'), e = txt.lastIndexOf('}');
@@ -440,6 +440,72 @@ async function runPack(cfg, job, o, log, quality, project) {
   }
   log(`✔ Pack listo: ${ok}/${items.length} assets. Búscalo en la biblioteca con “pack:${packName}”.`);
   job.status = ok ? 'done' : 'error'; if (!ok) job.error = 'No se generó ningún asset del pack.';
+}
+
+// ───────────────────────── Escenas 3D por prompt (el LLM compone con las piezas del editor) ─────────────────────────
+const SCENE_TYPES = {
+  cube: '1×1×1 m box, origin at its base', plane: '4×4 m flat plane', cylinder: 'Ø1 m, 1 m tall', cone: 'Ø1 m, 1 m tall', sphere: 'Ø1 m', torus: 'ring Ø1 m', capsule: '1.5 m tall',
+  wall: 'wall 4 m wide (local X) × 3 m tall × 0.3 m thick, origin bottom-center', wallwin: 'same wall with an arched window', doorway: 'same wall with an arched door',
+  floor: '4×4 m floor slab 0.2 m thick (put walls on top at y=0.2)', roof: 'gable roof 4.6 m wide (local X) × 4.4 m deep (local Z) × 1.8 m tall; for a 4×4 house rotate 90° in Y and place at y=3.2',
+  house: 'MACRO: complete 4×4 m cottage (floor, walls with door facing local +Z and windows, gable roof). Optional "color" = walls, "roof" = roof color. Use r[1] to turn the door towards the path', tower: 'MACRO: 3-story stone watchtower 4×4 m with cone roof', pier: 'MACRO: wooden pier 2 m wide, extends along local -Z; s[2] = length multiplier (1 = 8 m)',
+  stairs: '2 m wide stairs rising 1.5 m along local +Z over 2.4 m', column: '3.1 m column', arch: '3.2 m wide × 3.2 m tall stone arch', fence: '4 m fence along local X', crate: '0.8 m crate', barrel: 'barrel 1 m tall',
+  tree: 'deciduous tree ~4 m', pine: 'pine tree ~4 m', rock: 'rock ~1.2 m (scale freely)', bush: 'bush ~1 m', water: '6×6 m water plane (scale to make ponds/rivers)', plight: 'warm point light (lanterns, fires, windows at night)',
+};
+const SCENE_SYS = `You are a level designer composing a small 3D scene for a game from modular pieces, like assembling a diorama in Blender.
+Units are meters, Y is up, the ground is y=0, X is right, Z is towards the camera. Rotation is in DEGREES around Y unless needed.
+Available piece types (use ONLY these): ${Object.entries(SCENE_TYPES).map(([k, v]) => `${k}: ${v}`).join('; ')}.
+Return ONLY JSON: {"name": short snake_case, "tod": "day"|"dawn"|"dusk"|"night", "ground": "grass"|"grid", "objs": [{"type": one of the types, "name": short label, "p": [x,y,z], "r": [rx,ry,rz] degrees, "s": [sx,sy,sz], "color": "#rrggbb" optional}]}.
+Prefer the MACRO pieces (house, tower, pier) for buildings: one house object = one complete cottage. Space houses at least 7 m apart, never put buildings on water; a pier starts on land and goes over a water plane.\nRules: build structures that actually connect (walls meet at corners on a 4 m grid, roofs sit on walls, floors under houses), keep paths walkable, use 15-70 objects, vary scale and rotation of nature pieces so it does not look repeated, use believable colors, add point lights at doors/lamps when it is dusk or night. Keep everything within about 40×40 m around the origin.
+NEVER assemble buildings from floor/wall/roof pieces: always one "house" or "tower" object per building (walls are only for town walls, ruins or fences). Water planes: scale at most 3 (18 m), place them beside the village, not under it.
+Example for "two cottages by a pond at night":
+{"name":"pond_cottages","tod":"night","ground":"grass","objs":[{"type":"house","name":"cottage_a","p":[-5,0,0],"r":[0,20,0],"s":[1,1,1],"color":"#d9cbb0","roof":"#7a3326"},{"type":"house","name":"cottage_b","p":[5,0,-1],"r":[0,-15,0],"s":[1,1,1],"color":"#cfc2a8","roof":"#4a5a6a"},{"type":"water","name":"pond","p":[0,0,9],"r":[0,0,0],"s":[1.4,1,1],"color":"#2f6f8f"},{"type":"plight","name":"door_lamp_a","p":[-4.3,2.2,2.6],"r":[0,0,0],"s":[1,1,1],"color":"#ffb866"},{"type":"plight","name":"door_lamp_b","p":[5.5,2.2,1.6],"r":[0,0,0],"s":[1,1,1],"color":"#ffb866"},{"type":"pine","name":"pine","p":[-11,0,-6],"r":[0,40,0],"s":[1.2,1.3,1.2]},{"type":"tree","name":"oak","p":[10,0,-7],"r":[0,0,0],"s":[1.1,1.1,1.1]},{"type":"rock","name":"rock","p":[3,0,6],"r":[0,70,0],"s":[0.8,0.6,0.8]},{"type":"bush","name":"bush","p":[-2,0,4],"r":[0,0,0],"s":[1,1,1]}]}`;
+function expandMacro(o) { // casas, torres y muelles → piezas del kit con su transformación
+  const ry = (o.r[1] * Math.PI) / 180, c = Math.cos(ry), sn = Math.sin(ry);
+  const at = (x, y, z) => [o.p[0] + x * c + z * sn, o.p[1] + y, o.p[2] - x * sn + z * c];
+  const P = (type, x, y, z, rotY = 0, extra = {}) => ({ type, name: `${o.name || o.type} · ${type}`, p: at(x, y, z), r: [0, o.r[1] + rotY, 0], s: [1, 1, 1], ...extra });
+  const wc = o.color, rc = o.roof;
+  if (o.type === 'house') return [P('floor', 0, 0, 0), P('doorway', 0, 0.2, 2, 0, { color: wc }), P('wall', 0, 0.2, -2, 0, { color: wc }), P('wallwin', 2, 0.2, 0, 90, { color: wc }), P('wallwin', -2, 0.2, 0, 90, { color: wc }), P('roof', 0, 3.2, 0, 90, { color: rc })];
+  if (o.type === 'tower') { const out = []; for (let k = 0; k < 3; k++) { out.push(P(k === 1 ? 'wallwin' : k === 0 ? 'doorway' : 'wall', 0, k * 3, 2, 0, { color: wc || '#8f8a80' }), P(k === 2 ? 'wallwin' : 'wall', 0, k * 3, -2, 0, { color: wc || '#8f8a80' }), P('wallwin', 2, k * 3, 0, 90, { color: wc || '#8f8a80' }), P('wall', -2, k * 3, 0, 90, { color: wc || '#8f8a80' })); } out.push({ type: 'cone', name: `${o.name || 'tower'} · roof`, p: at(0, 9, 0), r: [0, 0, 0], s: [5.2, 3.2, 5.2], color: rc || '#6b2f2a' }); return out; }
+  if (o.type === 'pier') { const n = Math.max(1, Math.round(2 * (o.s[2] || 1))); const out = []; for (let k = 0; k < n; k++) { out.push({ type: 'cube', name: `${o.name || 'pier'} · deck`, p: at(0, 0.6, -2 - k * 4), r: [0, o.r[1], 0], s: [2, 0.15, 4], color: '#8a6440' }); for (const sx of [-0.9, 0.9]) out.push({ type: 'cylinder', name: `${o.name || 'pier'} · post`, p: at(sx, -0.5, -4 - k * 4), r: [0, 0, 0], s: [0.25, 1.4, 0.25], color: '#5c4029' }); } return out; }
+  return [o];
+}
+async function designScene(cfg, prompt, current) {
+  const user = `${current && current.length ? `Current scene objects (modify/extend them as requested, return the FULL list):\n${JSON.stringify(current).slice(0, 6000)}\n\n` : ''}Request (may be in any language): ${prompt}`;
+  const j = await llmJSON(cfg, SCENE_SYS, user, 6000);
+  const raw = (Array.isArray(j.objs) ? j.objs : []).filter((o) => o && SCENE_TYPES[o.type]).slice(0, 200).map((o) => {
+    const v3 = (a, d) => (Array.isArray(a) && a.length === 3 ? a.map((x) => (Number.isFinite(+x) ? Math.max(-500, Math.min(500, +x)) : 0)) : d);
+    const col = (c) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : undefined);
+    const sc = v3(o.s, [1, 1, 1]).map((x) => x || 1); if (o.type === 'water') { sc[0] = Math.min(3, Math.abs(sc[0])); sc[2] = Math.min(3, Math.abs(sc[2])); sc[1] = 1; }
+    return { type: o.type, name: String(o.name || o.type).slice(0, 40), p: v3(o.p, [0, 0, 0]), r: v3(o.r, [0, 0, 0]), s: sc, color: col(o.color), roof: col(o.roof) };
+  });
+  // maquetación: edificios sin solaparse (mín. 7 m entre centros) y agua bajo los muelles
+  const blds = raw.filter((o) => o.type === 'house' || o.type === 'tower');
+  for (let it = 0; it < 40; it++) {
+    let moved = false;
+    for (let i = 0; i < blds.length; i++) for (let k = i + 1; k < blds.length; k++) {
+      const A = blds[i].p, B = blds[k].p; let dx = B[0] - A[0], dz = B[2] - A[2]; let d = Math.hypot(dx, dz);
+      if (d < 7) { if (d < 0.01) { dx = 1; dz = 0; d = 1; } const push = (7 - d) / 2 + 0.05; A[0] -= dx / d * push; A[2] -= dz / d * push; B[0] += dx / d * push; B[2] += dz / d * push; moved = true; }
+    }
+    if (!moved) break;
+  }
+  for (const w of raw.filter((x) => x.type === 'water')) { // los edificios no se construyen sobre el agua
+    const pad = 2.5, hx = 3 * (w.s[0] || 1) + pad, hz = 3 * (w.s[2] || 1) + pad, ry = (w.r[1] * Math.PI) / 180, c = Math.cos(ry), sn = Math.sin(ry);
+    for (const b of raw.filter((x) => !['water', 'pier', 'plight', 'plane'].includes(x.type))) {
+      const dx = b.p[0] - w.p[0], dz = b.p[2] - w.p[2], lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+      if (Math.abs(lx) < hx && Math.abs(lz) < hz) {
+        let nx = lx, nz = lz; if (hx - Math.abs(lx) < hz - Math.abs(lz)) nx = Math.sign(lx || 1) * (hx + 0.5); else nz = Math.sign(lz || 1) * (hz + 0.5);
+        b.p[0] = w.p[0] + nx * c + nz * sn; b.p[2] = w.p[2] - nx * sn + nz * c;
+      }
+    }
+  }
+  for (const o of raw.filter((x) => x.type === 'pier')) {
+    if (raw.some((w) => w.type === 'water' && Math.hypot(w.p[0] - o.p[0], w.p[2] - o.p[2]) < 12)) continue;
+    const len = 8 * (o.s[2] || 1), ry = (o.r[1] * Math.PI) / 180;
+    raw.push({ type: 'water', name: 'agua', p: [o.p[0] - Math.sin(ry) * len * 0.75, 0, o.p[2] - Math.cos(ry) * len * 0.75], r: [0, o.r[1], 0], s: [Math.max(3, len / 3), 1, Math.max(2, len / 3)] });
+  }
+  const objs = raw.flatMap(expandMacro).map((o) => ({ type: o.type, name: o.name, p: o.p.map((v) => +v.toFixed(3)), r: o.r.map((d) => +((d * Math.PI) / 180).toFixed(4)), s: o.s, color: o.color }));
+  if (!objs.length) throw new Error('El LLM no devolvió piezas válidas.');
+  return { name: slugName(j.name || prompt), tod: ['day', 'dawn', 'dusk', 'night'].includes(j.tod) ? j.tod : 'day', ground: j.ground === 'grid' ? 'grid' : 'grass', objs };
 }
 
 // ───────────────────────── Exportar a motor (ZIP sin dependencias) ─────────────────────────
@@ -1439,6 +1505,11 @@ const server = http.createServer(async (req, res) => {
       const cfg = loadConfig(); const name = safeName(u.searchParams.get('name') || cfg.project) || 'MiJuego';
       if (req.method === 'POST') return send(res, 200, await saveProject(cfg, name, await readBody(req)));
       return send(res, 200, await loadProject(cfg, name));
+    }
+    if (p === '/api/scene-ai' && req.method === 'POST') {
+      const b = await readBody(req); const cfg = loadConfig();
+      try { return send(res, 200, await designScene(cfg, String(b.prompt || '').slice(0, 2000), Array.isArray(b.current) ? b.current : null)); }
+      catch (e) { return send(res, 502, { error: 'No se pudo componer la escena: ' + short(e.message, 200) }); }
     }
     if (p === '/api/export' && req.method === 'POST') {
       const b = await readBody(req);

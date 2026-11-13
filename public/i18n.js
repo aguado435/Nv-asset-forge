@@ -123,7 +123,8 @@
     'Guardada: en el estudio puedes optimizarla y renderizarla con Blender (LODs, FBX, sprites)': 'Saved: in the studio you can optimize and render it with Blender (LODs, FBX, sprites)',
     'Cubo': 'Cube', 'Plano': 'Plane', 'Cilindro': 'Cylinder', 'Cono': 'Cone', 'Esfera': 'Sphere', 'Toro': 'Torus', 'Cápsula': 'Capsule', 'Muro': 'Wall', 'Muro con ventana': 'Wall with window', 'Muro con puerta': 'Wall with door',
     'Suelo 4×4': 'Floor 4×4', 'Tejado a dos aguas': 'Gable roof', 'Escalera': 'Stairs', 'Columna': 'Column', 'Arco': 'Arch', 'Valla': 'Fence', 'Caja': 'Crate', 'Barril': 'Barrel', 'Árbol': 'Tree', 'Pino': 'Pine', 'Roca': 'Rock',
-    'Editor de escenas': 'Scene editor', 'Arbusto': 'Bush', 'Agua': 'Water', 'Luz puntual': 'Point light', 'Modelo': 'Model',
+    'Editor de escenas': 'Scene editor', '✨ Escena por IA': '✨ AI scene', 'Crear escena': 'Create scene', 'Modificar': 'Modify', 'Aplica la descripción a la escena actual': 'Apply the description to the current scene', 'Describe la escena': 'Describe the scene', '✨ componiendo la escena…': '✨ composing the scene…',
+    'Ej.: aldea de pescadores al atardecer con muelle, tres casas, barriles, faroles y un bosque de pinos detrás': 'E.g.: fishing village at dusk with a pier, three houses, barrels, lanterns and a pine forest behind', 'Arbusto': 'Bush', 'Agua': 'Water', 'Luz puntual': 'Point light', 'Modelo': 'Model',
     'Impacto mágico': 'Magic impact', 'Curación': 'Healing', 'Taberna medieval': 'Medieval tavern', 'Pozo de piedra': 'Stone well',
   };
   const P = [ // textos con partes variables
@@ -138,7 +139,7 @@
     [/^Juego listo: se abre en otra pestaña$/, 'Game ready: it opens in another tab'],
     [/^(.+) · (\d+) fot\.$/, (m, a, n) => `${({'Idle (respirar)': 'Idle (breathing)', 'Andar': 'Walk', 'Correr': 'Run', 'Atacar': 'Attack', 'Saltar': 'Jump', 'Recibir daño': 'Take damage', 'Lanzar hechizo': 'Cast spell', 'Morir': 'Die'})[a] || a} · ${n} fr.`],
     [/^Referencia: (.+)\. Marca “Copiar el estilo…” al generar\.$/, 'Reference: $1. Tick “Copy the style…” when generating.'],
-    [/^(\d+) objetos$/, '$1 objects'], [/^abierta: (.+)$/, 'opened: $1'],
+    [/^(\d+) objetos$/, '$1 objects'], [/^✨ (\d+) piezas: retócalas a mano o pide cambios$/, '✨ $1 pieces: tweak them by hand or ask for changes'], [/^abierta: (.+)$/, 'opened: $1'],
     [/^clic: seleccionar · arrastrar: orbitar · der\.: desplazar · rueda: zoom$/, 'click: select · drag: orbit · right: pan · wheel: zoom'],
     [/^G\/R\/S mover\/rotar\/escalar · Mayús\+D duplicar · X\/Supr borrar · H ocultar · F encuadrar · Ctrl\+Z deshacer$/, 'G/R/S move/rotate/scale · Shift+D duplicate · X/Del delete · H hide · F frame · Ctrl+Z undo'],
     [/^(\d+) muestras?$/, '$1 samples'],

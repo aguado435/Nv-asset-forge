@@ -71,6 +71,11 @@ footer{display:flex;align-items:center;gap:14px;padding:0 10px;background:var(--
 </header>
 <main>
   <aside class="l">
+    <h4>✨ Escena por IA</h4>
+    <div style="padding:0 10px 10px">
+      <textarea id="aiPrompt" rows="3" placeholder="Ej.: aldea de pescadores al atardecer con muelle, tres casas, barriles, faroles y un bosque de pinos detrás" style="width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:7px;padding:7px;font:inherit;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px"><button class="btn pri" id="aiNew" style="flex:1">Crear escena</button><button class="btn" id="aiMod" title="Aplica la descripción a la escena actual">Modificar</button></div>
+    </div>
     <h4>Añadir</h4>
     <div class="add" id="addPrim"></div>
     <h4>Kit modular</h4>
@@ -339,6 +344,22 @@ async function openScene(a) {
   history.replaceState(null, '', '?id=' + a.id);
 }
 $('#bNew').onclick = () => { if (DIRTY && !confirm('¿Descartar los cambios sin guardar?')) return; ASSET = null; STATE.objs = []; UNDO = []; REDO = []; SEL = null; rebuild(); $('#sName').value = 'mi_escena'; history.replaceState(null, '', location.pathname); DIRTY = false; $('#saved').textContent = ''; };
+// ───────── Escena por IA ─────────
+async function aiScene(modify) {
+  const prompt = $('#aiPrompt').value.trim(); if (!prompt) return toast('Describe la escena', 1);
+  readBack(); const btns = [$('#aiNew'), $('#aiMod')]; btns.forEach((b) => b.disabled = true); $('#saved').textContent = '✨ componiendo la escena…';
+  try {
+    const cur = modify ? STATE.objs.map((d) => ({ type: d.type, name: d.name, p: d.p, r: d.r.map((v) => Math.round(THREE.MathUtils.radToDeg(v))), s: d.s, color: d.mat?.color })).filter((o) => o.type !== 'model') : null;
+    const j = await api('/api/scene-ai', { method: 'POST', body: JSON.stringify({ prompt, current: cur }) });
+    pushUndo();
+    const keepModels = modify ? STATE.objs.filter((d) => d.type === 'model') : [];
+    STATE.objs = [...keepModels, ...j.objs.map((o, i) => ({ id: uid(), type: o.type, name: o.name, p: o.p, r: o.r, s: o.s, seed: i + 1, mat: { ...(T[o.type].m || {}), ...(o.color ? { color: o.color } : {}), ...(o.type === 'plight' ? { power: 30 } : {}) } }))];
+    setTOD(j.tod); $('#tod').value = j.tod; setGround(j.ground); if (!modify && !ASSET) $('#sName').value = j.name;
+    SEL = null; rebuild(); frame(false); markDirty(); toast(`✨ ${j.objs.length} piezas: retócalas a mano o pide cambios`);
+  } catch (e) { toast(e.message, 1); $('#saved').textContent = ''; }
+  btns.forEach((b) => b.disabled = false);
+}
+$('#aiNew').onclick = () => aiScene(false); $('#aiMod').onclick = () => aiScene(true);
 // ───────── Exportar y guardar ─────────
 function exportGLB() {
   readBack(); tc.detach();
