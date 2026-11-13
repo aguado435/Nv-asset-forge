@@ -1,5 +1,7 @@
 # NV Asset Forge
 
+[English](README.en.md) · **[Prueba Forge Lite en el navegador](https://aguado435.github.io/Nv-asset-forge/#lite)**
+
 **Estudio gratuito de assets 2D y 3D para videojuegos.** Escribes lo que quieres (en español vale) y la app lo genera con los modelos de IA de **NVIDIA Build**, lo procesa en tu PC con **Blender** y lo guarda listo para Unity, Godot o Unreal. También anima personajes y crea prototipos jugables con tus assets.
 
 - Gratis: usa la API gratuita de [build.nvidia.com](https://build.nvidia.com) con **tu propia clave**.

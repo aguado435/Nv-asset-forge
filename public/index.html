@@ -138,6 +138,7 @@ textarea{resize:vertical;min-height:84px}
 .studio .sbody{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;gap:24px;flex-wrap:wrap}
 .studio canvas{image-rendering:pixelated;box-shadow:0 10px 40px rgba(0,0,0,.5);border-radius:4px}
 .seg2 button.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
+.langseg button{padding:5px 9px;font-size:12px}
 .jobsbtn.on{border-color:var(--acc);color:var(--acc)} .jobsbtn span{font-weight:700;margin-left:4px}
 .jobsdock{position:fixed;right:18px;top:62px;width:380px;max-height:70vh;overflow:auto;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;z-index:50;display:none;box-shadow:0 18px 50px rgba(0,0,0,.45)}
 .jobsdock.show{display:block}
@@ -168,6 +169,7 @@ details.sec summary::-webkit-details-marker{display:none}
 @media (max-width:1100px){main{grid-template-columns:320px 1fr}.panel.right{display:none}}
 @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:auto 70vh}.app{height:auto}}
 </style>
+<script src="i18n.js"></script>
 </head>
 <body>
 <div class="app">
@@ -177,6 +179,7 @@ details.sec summary::-webkit-details-marker{display:none}
   <div class="proj">Proyecto <input type="text" id="project" placeholder="MiJuego"></div>
   <div class="pill" id="blPill" title="Blender se usa para optimizar modelos y renderizar"><span class="dot" id="blDot"></span><span id="blTxt">Blender…</span></div>
   <div class="pill" id="keyPill"><span class="dot" id="keyDot"></span><span id="keyTxt">Sin API key</span></div>
+  <div class="seg langseg" id="langSeg" title="Idioma / Language"><button data-l="es">ES</button><button data-l="en">EN</button></div>
   <button class="btn ghost jobsbtn" id="jobsBtn" title="Trabajos en curso">⚡ Trabajos <span id="jobsCount"></span></button>
   <button class="btn ghost" id="openLib" title="Abrir la carpeta de la biblioteca">📁 Carpeta</button>
   <button class="btn" id="openSettings">⚙ Ajustes</button>
@@ -783,6 +786,8 @@ $('#tEdit').onclick = () => {
   const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
   runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
 };
+// ───────── Idioma ─────────
+[...$('#langSeg').children].forEach((b) => { b.classList.toggle('on', b.dataset.l === window.NVF_LANG); b.onclick = () => window.setLang(b.dataset.l); });
 // ───────── Estudio a pantalla completa (pintor de mapas, luz 2D) ─────────
 function openStudio(title, toolsHtml) { $('#stTitle').textContent = title; $('#stTools').innerHTML = toolsHtml; $('#stBody').innerHTML = ''; $('#studio').classList.add('show'); }
 $('#stClose').onclick = () => { $('#studio').classList.remove('show'); STUDIO_CLOSE && STUDIO_CLOSE(); STUDIO_CLOSE = null; };
@@ -872,7 +877,7 @@ function fillPresets() {
 }
 $('#preset').onchange = () => {
   const p = (CFG.presets || [])[$('#preset').value]; if (!p) return;
-  $('#prompt').value = p.p; $('#category').value = p.c; $('#style').value = p.s; onCategory(); clearPlan();
+  $('#prompt').value = window.NVF_LANG === 'en' && p.pe ? p.pe : p.p; $('#category').value = p.c; $('#style').value = p.s; onCategory(); clearPlan();
   toast('Receta cargada: ajusta el texto si quieres y pulsa Generar');
 };
 // ───────── Pack coherente ─────────
