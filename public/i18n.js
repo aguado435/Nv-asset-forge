@@ -112,6 +112,18 @@
     'FLUX.2 klein · rápido y nítido (recomendado)': 'FLUX.2 klein · fast and sharp (recommended)', 'FLUX.1 dev · más pasos (a veces saturado)': 'FLUX.1 dev · more steps (sometimes overloaded)',
     'Personalizado': 'Custom', 'Genérico': 'Generic', 'Buscando Blender…': 'Looking for Blender…', 'Optimizando con NVIDIA…': 'Optimizing with NVIDIA…', 'Probando…': 'Testing…',
     'Sin imagen de referencia. Abre un asset 2D y pulsa “Usar como referencia”.': 'No reference image. Open a 2D asset and press “Use as reference”.', 'Aún no hay juegos en este proyecto.': 'No games in this project yet.',
+    '🧊 Escena 3D': '🧊 3D Scene', 'Editor de escenas 3D tipo Blender': 'Blender-style 3D scene editor', '🧊 Abrir en escena': '🧊 Open in scene', 'Abrir en el editor de escenas 3D': 'Open in the 3D scene editor',
+    'Escena 3D': '3D Scene', 'Nueva': 'New', 'Abrir…': 'Open…', 'Nombre de la escena': 'Scene name', 'Guardar en biblioteca': 'Save to library', '⬇ Render PNG': '⬇ Render PNG', 'Volver al estudio': 'Back to the studio',
+    'Añadir': 'Add', 'Kit modular': 'Modular kit', 'Naturaleza y luces': 'Nature and lights', '📦 Modelo de la biblioteca…': '📦 Library model…', 'Escena': 'Scene', 'Mover': 'Move', 'Rotar': 'Rotate', 'Escalar': 'Scale',
+    'Ajuste': 'Snap', 'Ajuste a rejilla (0,5 m / 15°)': 'Grid snap (0.5 m / 15°)', 'Arriba': 'Top', 'Frente': 'Front', 'Perspectiva': 'Perspective', 'Propiedades': 'Properties', 'Selecciona un objeto.': 'Select an object.',
+    'Entorno': 'Environment', 'Suelo': 'Ground', 'Césped': 'Grass', 'Ninguno': 'None', 'Nombre': 'Name', 'Posición (m)': 'Position (m)', 'Rotación (°)': 'Rotation (°)', 'Escala': 'Scale', 'Color': 'Color',
+    'Color de la luz': 'Light color', 'Potencia': 'Power', 'Rugosidad': 'Roughness', 'Metálico': 'Metallic', 'Emisión (brillo propio)': 'Emission (self glow)', 'Textura de la biblioteca': 'Library texture', '— ninguna —': '— none —',
+    'Repetición de la textura': 'Texture repeat', 'Vacía: añade piezas arriba.': 'Empty: add pieces above.', 'Modelos 3D de la biblioteca': 'Library 3D models', 'No hay modelos .glb todavía': 'No .glb models yet',
+    'Escenas guardadas': 'Saved scenes', 'Aún no hay escenas': 'No scenes yet', 'La escena está vacía': 'The scene is empty', '✓ guardada en la biblioteca': '✓ saved to the library', '● sin guardar': '● unsaved',
+    'Guardada: en el estudio puedes optimizarla y renderizarla con Blender (LODs, FBX, sprites)': 'Saved: in the studio you can optimize and render it with Blender (LODs, FBX, sprites)',
+    'Cubo': 'Cube', 'Plano': 'Plane', 'Cilindro': 'Cylinder', 'Cono': 'Cone', 'Esfera': 'Sphere', 'Toro': 'Torus', 'Cápsula': 'Capsule', 'Muro': 'Wall', 'Muro con ventana': 'Wall with window', 'Muro con puerta': 'Wall with door',
+    'Suelo 4×4': 'Floor 4×4', 'Tejado a dos aguas': 'Gable roof', 'Escalera': 'Stairs', 'Columna': 'Column', 'Arco': 'Arch', 'Valla': 'Fence', 'Caja': 'Crate', 'Barril': 'Barrel', 'Árbol': 'Tree', 'Pino': 'Pine', 'Roca': 'Rock',
+    'Editor de escenas': 'Scene editor', 'Arbusto': 'Bush', 'Agua': 'Water', 'Luz puntual': 'Point light', 'Modelo': 'Model',
     'Impacto mágico': 'Magic impact', 'Curación': 'Healing', 'Taberna medieval': 'Medieval tavern', 'Pozo de piedra': 'Stone well',
   };
   const P = [ // textos con partes variables
@@ -126,6 +138,9 @@
     [/^Juego listo: se abre en otra pestaña$/, 'Game ready: it opens in another tab'],
     [/^(.+) · (\d+) fot\.$/, (m, a, n) => `${({'Idle (respirar)': 'Idle (breathing)', 'Andar': 'Walk', 'Correr': 'Run', 'Atacar': 'Attack', 'Saltar': 'Jump', 'Recibir daño': 'Take damage', 'Lanzar hechizo': 'Cast spell', 'Morir': 'Die'})[a] || a} · ${n} fr.`],
     [/^Referencia: (.+)\. Marca “Copiar el estilo…” al generar\.$/, 'Reference: $1. Tick “Copy the style…” when generating.'],
+    [/^(\d+) objetos$/, '$1 objects'], [/^abierta: (.+)$/, 'opened: $1'],
+    [/^clic: seleccionar · arrastrar: orbitar · der\.: desplazar · rueda: zoom$/, 'click: select · drag: orbit · right: pan · wheel: zoom'],
+    [/^G\/R\/S mover\/rotar\/escalar · Mayús\+D duplicar · X\/Supr borrar · H ocultar · F encuadrar · Ctrl\+Z deshacer$/, 'G/R/S move/rotate/scale · Shift+D duplicate · X/Del delete · H hide · F frame · Ctrl+Z undo'],
     [/^(\d+) muestras?$/, '$1 samples'],
   ];
   const LOG = [ // líneas del registro de trabajos (llegan del servidor en español)
@@ -142,6 +157,7 @@
   ];
   const tx = (s) => {
     if (D[s] !== undefined) return D[s];
+    const ic = s.match(/^([^A-Za-zÁ-úÑñ¿¡\d\s]+\s)(.+)$/); if (ic && D[ic[2]] !== undefined) return ic[1] + D[ic[2]]; // «■ Cubo» → «■ Cube»
     for (const [re, to] of P) if (re.test(s)) return s.replace(re, to);
     const m = s.match(/^(\d\d:\d\d:\d\d\s+)([✔⚠✖■]?\s*)(.*)$/s); // línea de registro con hora
     if (m) { for (const [re, to] of LOG) { const body = (m[2] + m[3]).trim(); if (re.test(body)) return m[1] + body.replace(re, to); if (re.test(m[3])) return m[1] + m[2] + m[3].replace(re, to); } }

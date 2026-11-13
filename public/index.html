@@ -179,6 +179,7 @@ details.sec summary::-webkit-details-marker{display:none}
   <div class="proj">Proyecto <input type="text" id="project" placeholder="MiJuego"></div>
   <div class="pill" id="blPill" title="Blender se usa para optimizar modelos y renderizar"><span class="dot" id="blDot"></span><span id="blTxt">Blender…</span></div>
   <div class="pill" id="keyPill"><span class="dot" id="keyDot"></span><span id="keyTxt">Sin API key</span></div>
+  <a class="btn ghost" style="text-decoration:none" id="sceneBtn" href="scene.html" target="_blank" title="Editor de escenas 3D tipo Blender">🧊 Escena 3D</a>
   <div class="seg langseg" id="langSeg" title="Idioma / Language"><button data-l="es">ES</button><button data-l="en">EN</button></div>
   <button class="btn ghost jobsbtn" id="jobsBtn" title="Trabajos en curso">⚡ Trabajos <span id="jobsCount"></span></button>
   <button class="btn ghost" id="openLib" title="Abrir la carpeta de la biblioteca">📁 Carpeta</button>
@@ -312,7 +313,7 @@ details.sec summary::-webkit-details-marker{display:none}
       <div class="tg"><span>Luz</span><input type="range" id="rLight" min="0" max="300" value="100"></div>
       <div class="tg"><span>Sprite sheet</span><select id="ssDirs"><option value="4">4 dir</option><option value="8" selected>8 dir</option><option value="16">16 dir</option></select><select id="ssSize"><option>128</option><option selected>256</option><option>512</option></select><input type="number" id="ssElev" value="30" min="0" max="90" title="Elevación de cámara (º)"><button class="btn sm pri" id="rSheet">Renderizar</button></div>
       <div class="tg"><span>Blender</span><input type="number" id="bH" value="1.8" step="0.1" min="0" title="Altura real en metros (0 = no cambiar)"><input type="number" id="bTris" value="20000" step="1000" min="0" title="Máximo de triángulos LOD0 (0 = sin límite)"><button class="btn sm pri" id="bProc">Optimizar + LODs + FBX</button><select id="bEng"><option value="eevee">Eevee</option><option value="cycles">Cycles</option></select><button class="btn sm pri" id="bRender">Render Blender</button></div>
-      <div class="tg"><button class="btn sm" id="rShot">Render HD PNG</button><button class="btn sm" id="rThumb">Miniatura</button><button class="btn sm" id="rCopy">⬇ GLB</button></div>
+      <div class="tg"><button class="btn sm pri" id="rScene" title="Abrir en el editor de escenas 3D">🧊 Abrir en escena</button><button class="btn sm" id="rShot">Render HD PNG</button><button class="btn sm" id="rThumb">Miniatura</button><button class="btn sm" id="rCopy">⬇ GLB</button></div>
     </div>
   </section>
 
@@ -786,6 +787,9 @@ $('#tEdit').onclick = () => {
   const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
   runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
 };
+// ───────── Editor de escenas 3D ─────────
+$('#sceneBtn').onclick = (e) => { e.preventDefault(); window.open('scene.html?project=' + encodeURIComponent($('#project').value.trim()), '_blank'); };
+$('#rScene').onclick = () => { if (CUR) window.open('scene.html?id=' + CUR.id, '_blank'); };
 // ───────── Idioma ─────────
 [...$('#langSeg').children].forEach((b) => { b.classList.toggle('on', b.dataset.l === window.NVF_LANG); b.onclick = () => window.setLang(b.dataset.l); });
 // ───────── Estudio a pantalla completa (pintor de mapas, luz 2D) ─────────

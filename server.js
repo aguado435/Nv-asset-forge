@@ -1388,6 +1388,17 @@ const server = http.createServer(async (req, res) => {
       const { child, ...pub } = j;
       return send(res, 200, { ...pub, assets: j.assets.map(strip) });
     }
+    if (p === '/api/assets' && req.method === 'POST') { // crear un asset desde el navegador (escenas 3D del editor)
+      const cfg = loadConfig(); const b = await readBody(req);
+      const files = {};
+      for (const [n, d] of Object.entries(b.files || {})) {
+        if (!/^[\w\-.]{1,80}\.(png|glb|json)$/i.test(n) || n === 'meta.json') return send(res, 400, { error: 'nombre de archivo no válido: ' + n });
+        files[n] = Buffer.from(String(d).replace(/^data:[^,]+,/, ''), 'base64');
+      }
+      const kind = b.kind === '2d' ? '2d' : '3d';
+      const a = await createAsset(cfg, { name: slugName(b.name || 'escena'), project: b.project, kind, category: String(b.category || (kind === '3d' ? '3d-scene' : '2d-item')).slice(0, 30), prompt: String(b.prompt || '').slice(0, 500), tags: Array.isArray(b.tags) ? b.tags.map(String).slice(0, 8) : [], model: 'Editor de escenas', seed: 0 }, files);
+      return send(res, 200, strip(a));
+    }
     if (p === '/api/assets' && req.method === 'GET') return send(res, 200, (await listAssets(loadConfig())).map(strip));
     if ((m = p.match(/^\/api\/assets\/([\w]+)$/))) {
       const cfg = loadConfig(); const a = await findAsset(cfg, m[1]);

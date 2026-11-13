@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escena 3D · NV Asset Forge</title>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script src="i18n.js"></script>
+<style>
+:root{--bg:#0c0e11;--panel:#14171c;--panel2:#1a1e24;--line:#262b33;--line2:#323843;--text:#e8ecf1;--muted:#9aa3ae;--dim:#6b7380;--acc:#8fd14f;--accbg:rgba(143,209,79,.12);--err:#ff6b6b;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 Inter,system-ui,sans-serif;overflow:hidden}
+.app{display:grid;grid-template-rows:46px 1fr 26px;height:100vh}
+header{display:flex;align-items:center;gap:8px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--text);text-decoration:none;margin-right:6px}
+.logo i{width:18px;height:18px;border-radius:5px;background:conic-gradient(from 210deg,var(--acc),#3d6b14,var(--acc))}
+.btn{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:7px;padding:6px 10px;font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--acc)} .btn.pri{background:var(--acc);border-color:var(--acc);color:#10140c;font-weight:600} .btn.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
+.sep{width:1px;height:24px;background:var(--line2);margin:0 4px} .spacer{flex:1}
+input[type=text]{background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:7px;padding:6px 8px;font:inherit}
+main{display:grid;grid-template-columns:230px 1fr 270px;min-height:0}
+aside{background:var(--panel);overflow:auto;min-height:0} aside.l{border-right:1px solid var(--line)} aside.r{border-left:1px solid var(--line)}
+h4{margin:0;padding:10px 12px 6px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.add{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:0 10px 10px}
+.add button{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:6px 4px;cursor:pointer;font:inherit;font-size:12px;text-align:left}
+.add button:hover{border-color:var(--acc)}
+.outl{padding:0 6px 10px}
+.outl div{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.outl div:hover{background:rgba(255,255,255,.04)} .outl div.sel{background:var(--accbg);color:var(--acc)} .outl div.hid{opacity:.45}
+.outl .ic{width:14px;text-align:center;color:var(--dim)}
+#vp{position:relative;min-width:0;min-height:0;background:#1b1f25}
+#vp canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;left:10px;top:10px;display:flex;gap:6px}
+.hud .btn{padding:4px 8px;font-size:12px;background:rgba(20,23,28,.85)}
+.help{position:absolute;right:10px;bottom:10px;font:11px/1.6 var(--mono);color:var(--dim);background:rgba(12,14,17,.7);padding:6px 9px;border-radius:7px;pointer-events:none}
+.props{padding:0 12px 12px}
+.props label{display:block;color:var(--muted);font-size:11.5px;margin:9px 0 4px}
+.v3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.v3 input,.props select,.props input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line2);color:var(--text);border-radius:6px;padding:5px 6px;font:12px var(--mono)}
+.props input[type=color]{width:100%;height:28px;border:1px solid var(--line2);border-radius:6px;background:var(--panel2);padding:2px}
+.props input[type=range]{width:100%}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.empty{color:var(--dim);padding:6px 12px 12px}
+footer{display:flex;align-items:center;gap:14px;padding:0 10px;background:var(--panel);border-top:1px solid var(--line);color:var(--dim);font:11.5px var(--mono)}
+.toast{position:fixed;bottom:38px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);padding:8px 13px;border-radius:9px;display:none;z-index:9}
+.toast.show{display:block} .toast.err{border-color:var(--err)}
+.menu{position:absolute;z-index:8;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:4px;min-width:220px;max-height:60vh;overflow:auto;display:none}
+.menu.show{display:block} .menu div{padding:6px 9px;border-radius:5px;cursor:pointer} .menu div:hover{background:var(--accbg)} .menu .h{color:var(--dim);cursor:default;font-size:11px;text-transform:uppercase;letter-spacing:.6px} .menu .h:hover{background:none}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <a class="logo" href="/" title="Volver al estudio"><i></i>NV Asset Forge</a>
+  <b style="color:var(--muted);font-weight:600">Escena 3D</b>
+  <div class="sep"></div>
+  <button class="btn" id="bNew">Nueva</button>
+  <button class="btn" id="bOpen">Abrir…</button>
+  <input type="text" id="sName" value="mi_escena" title="Nombre de la escena" style="width:140px">
+  <button class="btn pri" id="bSave" title="Ctrl+S">Guardar en biblioteca</button>
+  <div class="sep"></div>
+  <button class="btn" id="bGlb">⬇ GLB</button>
+  <button class="btn" id="bShot">⬇ Render PNG</button>
+  <div class="spacer"></div>
+  <span style="color:var(--muted)">Proyecto</span><input type="text" id="proj" style="width:120px">
+</header>
+<main>
+  <aside class="l">
+    <h4>Añadir</h4>
+    <div class="add" id="addPrim"></div>
+    <h4>Kit modular</h4>
+    <div class="add" id="addKit"></div>
+    <h4>Naturaleza y luces</h4>
+    <div class="add" id="addNat"></div>
+    <div class="add"><button id="addLib" style="grid-column:1/-1">📦 Modelo de la biblioteca…</button></div>
+    <h4>Escena</h4>
+    <div class="outl" id="outl"></div>
+  </aside>
+  <div id="vp">
+    <div class="hud">
+      <button class="btn on" data-m="translate" title="G">Mover</button><button class="btn" data-m="rotate" title="R">Rotar</button><button class="btn" data-m="scale" title="S">Escalar</button>
+      <button class="btn" id="snap" title="Ajuste a rejilla (0,5 m / 15°)">Ajuste</button>
+      <button class="btn" id="vTop" title="Numpad 7">Arriba</button><button class="btn" id="vFront" title="Numpad 1">Frente</button><button class="btn" id="vPersp" title="Numpad 0">Perspectiva</button>
+    </div>
+    <div class="help">clic: seleccionar · arrastrar: orbitar · der.: desplazar · rueda: zoom<br>G/R/S mover/rotar/escalar · Mayús+D duplicar · X/Supr borrar · H ocultar · F encuadrar · Ctrl+Z deshacer</div>
+    <div class="menu" id="menu"></div>
+  </div>
+  <aside class="r">
+    <h4>Propiedades</h4>
+    <div id="props"><div class="empty">Selecciona un objeto.</div></div>
+    <h4>Entorno</h4>
+    <div class="props">
+      <label>Hora del día</label><select id="tod"><option value="day">Día</option><option value="dawn">Amanecer</option><option value="dusk">Atardecer</option><option value="night">Noche</option></select>
+      <label>Suelo</label><select id="ground"><option value="grid">Rejilla</option><option value="grass">Césped</option><option value="none">Ninguno</option></select>
+    </div>
+  </aside>
+</main>
+<footer><span id="stat">0 objetos</span><span id="selInfo"></span><div class="spacer"></div><span id="saved"></span></footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const $ = (s) => document.querySelector(s);
+const api = async (u, o = {}) => { const r = await fetch(u, { ...o, headers: { 'Content-Type': 'application/json' } }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error ' + r.status); return j; };
+let tt; const toast = (m, e) => { const t = $('#toast'); t.textContent = m; t.className = 'toast show' + (e ? ' err' : ''); clearTimeout(tt); tt = setTimeout(() => t.className = 'toast', e ? 5000 : 2400); };
+
+// ───────── Render y viewport ─────────
+const vp = $('#vp');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+vp.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camP = new THREE.PerspectiveCamera(45, 1, 0.05, 2000); camP.position.set(14, 11, 16);
+const camO = new THREE.OrthographicCamera(-10, 10, 10, -10, -500, 2000);
+let cam = camP;
+const orbit = new OrbitControls(camP, renderer.domElement); orbit.enableDamping = true; orbit.target.set(0, 1, 0);
+orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x3a2f22, 0.6); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 140 }); scene.add(sun, sun.target);
+const grid = new THREE.GridHelper(60, 60, 0x6a7380, 0x4a525d); grid.material.transparent = true; grid.material.opacity = 0.6; scene.add(grid);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x3b4048, roughness: 1 }), catchMat = new THREE.ShadowMaterial({ opacity: 0.32 });
+const shadowCatcher = new THREE.Mesh(new THREE.CircleGeometry(80, 64), floorMat); shadowCatcher.rotation.x = -Math.PI / 2; shadowCatcher.receiveShadow = true; scene.add(shadowCatcher);
+const grassMat = new THREE.MeshStandardMaterial({ color: 0x5f8f3e, roughness: 1 });
+const groundMesh = new THREE.Mesh(new THREE.CircleGeometry(40, 64), grassMat); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = -0.01; groundMesh.receiveShadow = true; groundMesh.visible = false; scene.add(groundMesh);
+const world = new THREE.Group(); world.name = 'Escena'; scene.add(world);
+
+const TOD = { day: { sky: 0x9fc4e8, sun: [0xfff1dc, 2.6, [12, 20, 8]], hemi: 0.6, exp: 1.0 }, dawn: { sky: 0xe7b6a0, sun: [0xffc29a, 1.9, [-18, 7, 10]], hemi: 0.45, exp: 1.0 },
+  dusk: { sky: 0x6a5a8a, sun: [0xff8a45, 2.4, [18, 5, -6]], hemi: 0.3, exp: 0.78 }, night: { sky: 0x0d1424, sun: [0x8fa8ff, 0.4, [-6, 20, 10]], hemi: 0.1, exp: 0.42 } };
+function setTOD(k) { const t = TOD[k] || TOD.day; scene.background = new THREE.Color(t.sky); sun.color.set(t.sun[0]); sun.intensity = t.sun[1]; sun.position.set(...t.sun[2]); hemi.intensity = t.hemi; renderer.toneMappingExposure = t.exp; STATE.tod = k; world.traverse((o) => { if (o.isPointLight) o.intensity = o.userData.base * lampBoost(); }); }
+const lampBoost = () => ({ night: 4, dusk: 2, dawn: 1.5 })[STATE.tod] || 1;
+const tc = new TransformControls(camP, renderer.domElement); scene.add(tc);
+tc.addEventListener('dragging-changed', (e) => { orbit.enabled = !e.value; if (e.value) pushUndo(); else { syncProps(); markDirty(); } });
+tc.addEventListener('objectChange', () => syncProps(true));
+
+function resize() { const r = vp.getBoundingClientRect(); renderer.setSize(r.width, r.height, false); camP.aspect = r.width / r.height; camP.updateProjectionMatrix(); const h = camO.top; camO.left = -h * camP.aspect; camO.right = h * camP.aspect; camO.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(vp);
+(function loop() { requestAnimationFrame(loop); orbit.update(); renderer.render(scene, cam); })();
+
+// ───────── Materiales y piezas ─────────
+const TEX = {}; const texLoader = new THREE.TextureLoader();
+function texture(url, rep) { const k = url + '|' + rep; if (!TEX[k]) { const t = texLoader.load(url); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; TEX[k] = t; } return TEX[k]; }
+function makeMat(m) { const mat = new THREE.MeshStandardMaterial({ color: m.color || '#c8c2b8', roughness: m.rough ?? 0.8, metalness: m.metal ?? 0, emissive: m.emissive || '#000000', emissiveIntensity: m.emissive && m.emissive !== '#000000' ? 2.5 : 0 }); if (m.tex) mat.map = texture(m.tex, m.rep || 1); return mat; }
+const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.95 });
+const G = THREE;
+function prism(w, h, d) { const s = new G.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(0, h); s.closePath(); const g = new G.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2); return g; }
+function merged(list) { const gs = list.map(([g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0]) => { const m = new G.Matrix4().compose(new G.Vector3(x, y, z), new G.Quaternion().setFromEuler(new G.Euler(rx, ry, rz)), new G.Vector3(1, 1, 1)); const n = g.index ? g.toNonIndexed() : g; n.applyMatrix4(m); n.deleteAttribute && ['uv2'].forEach((a) => n.deleteAttribute(a)); return n; }); return mergeGeometries(gs, false); }
+function rockGeo(seed) { const g = new G.IcosahedronGeometry(1, 2); const p = g.attributes.position; let s = seed * 9301 + 49297; const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280); const cache = new Map();
+  for (let i = 0; i < p.count; i++) { const k = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`; if (!cache.has(k)) cache.set(k, 0.78 + rnd() * 0.4); const f = cache.get(k); p.setXYZ(i, p.getX(i) * f * 1.2, p.getY(i) * f * 0.75, p.getZ(i) * f); }
+  g.computeVertexNormals(); g.translate(0, 0.5, 0); return g; }
+// type → { label, icon, geo(params) | build(o) , mat defaults }
+const T = {
+  cube: { l: 'Cubo', i: '■', g: () => new G.BoxGeometry(1, 1, 1).translate(0, 0.5, 0) },
+  plane: { l: 'Plano', i: '▭', g: () => new G.PlaneGeometry(4, 4).rotateX(-Math.PI / 2) },
+  cylinder: { l: 'Cilindro', i: '◯', g: () => new G.CylinderGeometry(0.5, 0.5, 1, 32).translate(0, 0.5, 0) },
+  cone: { l: 'Cono', i: '▲', g: () => new G.ConeGeometry(0.5, 1, 32).translate(0, 0.5, 0) },
+  sphere: { l: 'Esfera', i: '●', g: () => new G.SphereGeometry(0.5, 32, 20).translate(0, 0.5, 0) },
+  torus: { l: 'Toro', i: '◎', g: () => new G.TorusGeometry(0.5, 0.18, 16, 40).rotateX(Math.PI / 2).translate(0, 0.18, 0) },
+  capsule: { l: 'Cápsula', i: '⬭', g: () => new G.CapsuleGeometry(0.35, 0.8, 8, 16).translate(0, 0.75, 0) },
+  // kit modular (metros, rejilla de 4 m)
+  wall: { l: 'Muro', i: '▤', k: 1, g: () => new G.BoxGeometry(4, 3, 0.3).translate(0, 1.5, 0), m: { color: '#b9ab96', rough: 0.95 } },
+  wallwin: { l: 'Muro con ventana', i: '▦', k: 1, g: () => { const s = new G.Shape(); s.moveTo(-2, 0); s.lineTo(2, 0); s.lineTo(2, 3); s.lineTo(-2, 3); s.closePath(); const h = new G.Path(); h.moveTo(-0.6, 1.1); h.lineTo(0.6, 1.1); h.lineTo(0.6, 2.2); h.absarc(0, 2.2, 0.6, 0, Math.PI, false); h.lineTo(-0.6, 1.1); s.holes.push(h); return new G.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false }).translate(0, 0, -0.15); }, m: { color: '#b9ab96', rough: 0.95 } },
+  doorway: { l: 'Muro con puerta', i: '⌂', k: 1, g: () => { const s = new G.Shape(); s.moveTo(-2, 0); s.lineTo(-0.7, 0); s.lineTo(-0.7, 1.9); s.absarc(0, 1.9, 0.7, Math.PI, 0, true); s.lineTo(0.7, 0); s.lineTo(2, 0); s.lineTo(2, 3); s.lineTo(-2, 3); s.closePath(); return new G.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false }).translate(0, 0, -0.15); }, m: { color: '#b9ab96', rough: 0.95 } },
+  floor: { l: 'Suelo 4×4', i: '▬', k: 1, g: () => new G.BoxGeometry(4, 0.2, 4).translate(0, 0.1, 0), m: { color: '#8f8576', rough: 0.9 } },
+  roof: { l: 'Tejado a dos aguas', i: '⌃', k: 1, g: () => prism(4.6, 1.8, 4.4), m: { color: '#8a3b2c', rough: 0.85 } },
+  stairs: { l: 'Escalera', i: '≡', k: 1, g: () => merged(Array.from({ length: 6 }, (_, i) => [new G.BoxGeometry(2, 0.25 * (i + 1), 0.4), 0, 0.125 * (i + 1), -1 + i * 0.4])), m: { color: '#9c9285', rough: 0.9 } },
+  column: { l: 'Columna', i: '‖', k: 1, g: () => merged([[new G.BoxGeometry(0.8, 0.25, 0.8), 0, 0.125], [new G.CylinderGeometry(0.28, 0.32, 2.6, 16), 0, 1.55], [new G.BoxGeometry(0.75, 0.25, 0.75), 0, 2.97]]), m: { color: '#d8d0c2', rough: 0.7 } },
+  arch: { l: 'Arco', i: '∩', k: 1, g: () => { const s = new G.Shape(); s.moveTo(-1.6, 0); s.lineTo(-1.0, 0); s.lineTo(-1.0, 1.8); s.absarc(0, 1.8, 1.0, Math.PI, 0, true); s.lineTo(1.0, 0); s.lineTo(1.6, 0); s.lineTo(1.6, 3.2); s.lineTo(-1.6, 3.2); s.closePath(); return new G.ExtrudeGeometry(s, { depth: 0.6, bevelEnabled: false }).translate(0, 0, -0.3); }, m: { color: '#c9bfae', rough: 0.9 } },
+  fence: { l: 'Valla', i: '╫', k: 1, g: () => merged([[new G.BoxGeometry(0.12, 1, 0.12), -1.9, 0.5], [new G.BoxGeometry(0.12, 1, 0.12), 0, 0.5], [new G.BoxGeometry(0.12, 1, 0.12), 1.9, 0.5], [new G.BoxGeometry(4, 0.1, 0.06), 0, 0.75], [new G.BoxGeometry(4, 0.1, 0.06), 0, 0.4]]), m: { color: '#7a5a3c', rough: 0.95 } },
+  crate: { l: 'Caja', i: '▣', k: 1, g: () => new G.BoxGeometry(0.8, 0.8, 0.8).translate(0, 0.4, 0), m: { color: '#9a7347', rough: 0.9 } },
+  barrel: { l: 'Barril', i: '◍', k: 1, g: () => new G.CylinderGeometry(0.38, 0.38, 1, 20).translate(0, 0.5, 0), m: { color: '#7d5634', rough: 0.85 } },
+  // naturaleza y luces
+  tree: { l: 'Árbol', i: '🌳', n: 1, build: (mat) => { const g = new G.Group(); const t = new G.Mesh(new G.CylinderGeometry(0.18, 0.28, 2.2, 8).translate(0, 1.1, 0), trunkMat); const c = new G.Mesh(merged([[new G.IcosahedronGeometry(1.3, 1), 0, 2.9], [new G.IcosahedronGeometry(0.95, 1), 0.8, 2.5, 0.3], [new G.IcosahedronGeometry(0.9, 1), -0.7, 2.6, -0.4]]), mat); g.add(t, c); return g; }, m: { color: '#4f8a3a', rough: 0.9 } },
+  pine: { l: 'Pino', i: '🌲', n: 1, build: (mat) => { const g = new G.Group(); g.add(new G.Mesh(new G.CylinderGeometry(0.15, 0.22, 1.2, 8).translate(0, 0.6, 0), trunkMat)); g.add(new G.Mesh(merged([[new G.ConeGeometry(1.3, 1.8, 9), 0, 1.7], [new G.ConeGeometry(1.0, 1.6, 9), 0, 2.6], [new G.ConeGeometry(0.7, 1.3, 9), 0, 3.4]]), mat)); return g; }, m: { color: '#2f6b44', rough: 0.9 } },
+  rock: { l: 'Roca', i: '⬣', n: 1, g: (o) => rockGeo(o.seed || 1), m: { color: '#8b8a86', rough: 0.95 } },
+  bush: { l: 'Arbusto', i: '❀', n: 1, g: () => merged([[new G.IcosahedronGeometry(0.6, 1), 0, 0.45], [new G.IcosahedronGeometry(0.45, 1), 0.5, 0.35, 0.1], [new G.IcosahedronGeometry(0.45, 1), -0.45, 0.35, -0.15]]), m: { color: '#4a7d36', rough: 0.95 } },
+  water: { l: 'Agua', i: '≈', n: 1, g: () => new G.PlaneGeometry(6, 6).rotateX(-Math.PI / 2).translate(0, 0.05, 0), m: { color: '#2f6f8f', rough: 0.08, metal: 0.1 } },
+  plight: { l: 'Luz puntual', i: '✺', n: 1, light: 1, m: { color: '#ffc27a' } },
+  model: { l: 'Modelo', i: '◆' },
+};
+for (const [k, t] of Object.entries(T)) { if (k === 'model') continue; const b = document.createElement('button'); b.textContent = `${t.i} ${t.l}`; b.onclick = () => add(k); $(t.k ? '#addKit' : t.n ? '#addNat' : '#addPrim').append(b); }
+
+// ───────── Estado (descriptores serializables) ─────────
+const STATE = { objs: [], tod: 'day', ground: 'grid' }; let SEL = null, UNDO = [], REDO = [], DIRTY = false, ASSET = null;
+const gltfLoader = new GLTFLoader(); const GLB = {};
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function build(d) {
+  const t = T[d.type]; let o;
+  const mat = makeMat({ ...(t.m || {}), ...(d.mat || {}) });
+  if (t.light) { o = new G.Group(); const l = new G.PointLight(d.mat?.color || '#ffc27a', (d.mat?.power ?? 30) * lampBoost(), 18, 2); l.userData.base = d.mat?.power ?? 30; l.castShadow = true; l.shadow.mapSize.set(512, 512); l.position.y = 0.4; const bulb = new G.Mesh(new G.SphereGeometry(0.12, 12, 8), new G.MeshBasicMaterial({ color: d.mat?.color || '#ffc27a' })); bulb.position.y = 0.4; bulb.userData.helper = true; o.add(l, bulb); }
+  else if (d.type === 'model') { o = new G.Group(); const load = (gl) => { const c = gl.scene.clone(true); c.traverse((m) => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; } }); o.add(c); }; if (GLB[d.src]) load(GLB[d.src]); else gltfLoader.load(d.src, (gl) => { GLB[d.src] = gl; load(gl); }, undefined, () => toast('No se pudo cargar ' + d.name, 1)); }
+  else if (t.build) o = t.build(mat);
+  else { o = new G.Mesh(t.g(d), mat); }
+  o.traverse((m) => { if (m.isMesh && !m.userData.helper) { m.castShadow = true; m.receiveShadow = true; } });
+  o.position.fromArray(d.p || [0, 0, 0]); o.rotation.fromArray([...(d.r || [0, 0, 0]), 'XYZ']); o.scale.fromArray(d.s || [1, 1, 1]); o.visible = !d.h;
+  o.userData.id = d.id; o.name = d.name; return o;
+}
+function rebuild() { tc.detach(); world.clear(); for (const d of STATE.objs) world.add(build(d)); select(SEL && STATE.objs.find((d) => d.id === SEL) ? SEL : null); outliner(); stat(); }
+const objOf = (id) => world.children.find((o) => o.userData.id === id);
+const descOf = (id) => STATE.objs.find((d) => d.id === id);
+function snapshot() { return JSON.stringify({ objs: STATE.objs, tod: STATE.tod, ground: STATE.ground }); }
+function pushUndo() { UNDO.push(snapshot()); if (UNDO.length > 80) UNDO.shift(); REDO = []; }
+function restore(s) { const j = JSON.parse(s); STATE.objs = j.objs; setTOD(j.tod); setGround(j.ground); rebuild(); }
+function markDirty() { DIRTY = true; $('#saved').textContent = '● sin guardar'; }
+function readBack() { for (const o of world.children) { const d = descOf(o.userData.id); if (!d) continue; d.p = o.position.toArray().map((v) => +v.toFixed(4)); d.r = [o.rotation.x, o.rotation.y, o.rotation.z].map((v) => +v.toFixed(4)); d.s = o.scale.toArray().map((v) => +v.toFixed(4)); } }
+function add(type, extra = {}) {
+  pushUndo(); const t = T[type];
+  const base = extra.name || t.l; const n = STATE.objs.filter((d) => d.name.replace(/\.\d{3}$/, '') === base).length + 1;
+  const tgt = orbit.target; const snapV = (v) => Math.round(v * 2) / 2;
+  const d = { id: uid(), type, name: `${base}${n > 1 ? '.' + String(n - 1).padStart(3, '0') : ''}`, p: [snapV(tgt.x), 0, snapV(tgt.z)], r: [0, 0, 0], s: [1, 1, 1], mat: { ...(t.m || {}) }, seed: Math.floor(Math.random() * 1000), ...extra };
+  STATE.objs.push(d); world.add(build(d)); select(d.id); outliner(); stat(); markDirty();
+}
+function del() { if (!SEL) return; pushUndo(); STATE.objs = STATE.objs.filter((d) => d.id !== SEL); const o = objOf(SEL); tc.detach(); world.remove(o); SEL = null; outliner(); props(); stat(); markDirty(); }
+function dup() { if (!SEL) return; readBack(); pushUndo(); const d = JSON.parse(JSON.stringify(descOf(SEL))); d.id = uid(); const b0 = d.name.replace(/\.\d{3}$/, ''); d.name = b0 + '.' + String(STATE.objs.filter((x) => x.name.replace(/\.\d{3}$/, '') === b0).length).padStart(3, '0'); d.p[0] += 1; d.p[2] += 1; STATE.objs.push(d); world.add(build(d)); select(d.id); outliner(); stat(); markDirty(); tc.setMode('translate'); modeBtns('translate'); }
+function select(id) { SEL = id; const o = id && objOf(id); if (o) tc.attach(o); else tc.detach(); outliner(); props(); $('#selInfo').textContent = o ? `▸ ${o.name}` : ''; }
+function stat() { $('#stat').textContent = `${STATE.objs.length} objetos`; }
+function outliner() {
+  const el = $('#outl'); el.innerHTML = '';
+  for (const d of STATE.objs) { const r = document.createElement('div'); r.className = (d.id === SEL ? 'sel ' : '') + (d.h ? 'hid' : ''); r.innerHTML = `<span class="ic">${T[d.type].i}</span>${d.name.replace(/</g, '&lt;')}`; r.onclick = () => select(d.id); el.append(r); }
+  if (!STATE.objs.length) el.innerHTML = '<div style="color:var(--dim);cursor:default">Vacía: añade piezas arriba.</div>';
+}
+// ───────── Panel de propiedades ─────────
+let TEXLIST = [];
+function props() {
+  const el = $('#props'); const d = SEL && descOf(SEL);
+  if (!d) { el.innerHTML = '<div class="empty">Selecciona un objeto.</div>'; return; }
+  const m = d.mat || {}; const isL = T[d.type].light; const isM = d.type === 'model';
+  el.innerHTML = `<div class="props">
+    <label>Nombre</label><input type="text" id="pName" value="${d.name.replace(/"/g, '&quot;')}" style="width:100%">
+    <label>Posición (m)</label><div class="v3"><input type="number" step="0.1" data-k="p0"><input type="number" step="0.1" data-k="p1"><input type="number" step="0.1" data-k="p2"></div>
+    <label>Rotación (°)</label><div class="v3"><input type="number" step="5" data-k="r0"><input type="number" step="5" data-k="r1"><input type="number" step="5" data-k="r2"></div>
+    <label>Escala</label><div class="v3"><input type="number" step="0.1" data-k="s0"><input type="number" step="0.1" data-k="s1"><input type="number" step="0.1" data-k="s2"></div>
+    ${isM ? '' : `<label>${isL ? 'Color de la luz' : 'Color'}</label><input type="color" id="pColor" value="${m.color || '#c8c2b8'}">`}
+    ${isL ? `<label>Potencia</label><input type="range" id="pPow" min="1" max="200" value="${m.power ?? 30}">` : isM ? '' : `
+    <div class="row2"><div><label>Rugosidad</label><input type="range" id="pRough" min="0" max="1" step="0.01" value="${m.rough ?? 0.8}"></div><div><label>Metálico</label><input type="range" id="pMetal" min="0" max="1" step="0.01" value="${m.metal ?? 0}"></div></div>
+    <label>Emisión (brillo propio)</label><input type="color" id="pEmis" value="${m.emissive || '#000000'}">
+    <label>Textura de la biblioteca</label><select id="pTex"><option value="">— ninguna —</option>${TEXLIST.map((t) => `<option value="${t.url}"${m.tex === t.url ? ' selected' : ''}>${t.name}</option>`).join('')}</select>
+    <label>Repetición de la textura</label><input type="number" id="pRep" step="0.5" min="0.25" value="${m.rep || 1}">`}
+  </div>`;
+  syncProps();
+  $('#pName').onchange = (e) => { pushUndo(); d.name = e.target.value || d.name; objOf(d.id).name = d.name; outliner(); markDirty(); };
+  el.querySelectorAll('.v3 input').forEach((inp) => inp.onchange = () => { pushUndo(); const o = objOf(d.id); const [k, i] = [inp.dataset.k[0], +inp.dataset.k[1]]; const v = +inp.value;
+    if (k === 'p') o.position.setComponent(i, v); if (k === 's') o.scale.setComponent(i, v || 0.01); if (k === 'r') o.rotation[['x', 'y', 'z'][i]] = THREE.MathUtils.degToRad(v); readBack(); markDirty(); });
+  const matChange = (fn) => () => { pushUndo(); d.mat = d.mat || {}; fn(d.mat); const o = objOf(d.id); const n = build(d); world.add(n); world.remove(o); select(d.id); markDirty(); };
+  if ($('#pColor')) $('#pColor').onchange = matChange((mm) => mm.color = $('#pColor').value);
+  if ($('#pPow')) $('#pPow').onchange = matChange((mm) => mm.power = +$('#pPow').value);
+  if ($('#pRough')) $('#pRough').onchange = matChange((mm) => mm.rough = +$('#pRough').value);
+  if ($('#pMetal')) $('#pMetal').onchange = matChange((mm) => mm.metal = +$('#pMetal').value);
+  if ($('#pEmis')) $('#pEmis').onchange = matChange((mm) => mm.emissive = $('#pEmis').value);
+  if ($('#pTex')) $('#pTex').onchange = matChange((mm) => { mm.tex = $('#pTex').value || undefined; if (mm.tex && (!mm.color || mm.color === (T[d.type].m || {}).color)) mm.color = '#ffffff'; });
+  if ($('#pRep')) $('#pRep').onchange = matChange((mm) => mm.rep = +$('#pRep').value);
+}
+function syncProps(live) {
+  const d = SEL && descOf(SEL); const o = SEL && objOf(SEL); if (!d || !o) return;
+  if (live) readBack();
+  const v = { p: o.position.toArray(), r: [o.rotation.x, o.rotation.y, o.rotation.z].map(THREE.MathUtils.radToDeg), s: o.scale.toArray() };
+  document.querySelectorAll('#props .v3 input').forEach((inp) => { if (document.activeElement !== inp) inp.value = (+v[inp.dataset.k[0]][+inp.dataset.k[1]].toFixed(3)); });
+}
+// ───────── Selección con clic (sin arrastrar) ─────────
+const ray = new THREE.Raycaster(); let downAt = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; $('#menu').classList.remove('show'); });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!downAt || e.button !== 0 || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || tc.dragging) return;
+  const r = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam);
+  const hit = ray.intersectObjects(world.children, true).find((h) => h.object.visible);
+  let o = hit && hit.object; while (o && o.parent !== world) o = o.parent;
+  select(o ? o.userData.id : null);
+});
+// ───────── Atajos tipo Blender ─────────
+function modeBtns(m) { document.querySelectorAll('.hud [data-m]').forEach((b) => b.classList.toggle('on', b.dataset.m === m)); }
+document.querySelectorAll('.hud [data-m]').forEach((b) => b.onclick = () => { tc.setMode(b.dataset.m); modeBtns(b.dataset.m); });
+let SNAP = false; $('#snap').onclick = () => { SNAP = !SNAP; $('#snap').classList.toggle('on', SNAP); tc.setTranslationSnap(SNAP ? 0.5 : null); tc.setRotationSnap(SNAP ? THREE.MathUtils.degToRad(15) : null); tc.setScaleSnap(SNAP ? 0.25 : null); };
+function frame(sel = true) {
+  const box = new THREE.Box3(); const tgt = sel && SEL ? objOf(SEL) : world; box.setFromObject(tgt); if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(0, 1, 0), new THREE.Vector3(8, 4, 8));
+  const c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() * 0.75 + 1;
+  const dir = camP.position.clone().sub(orbit.target).normalize(); orbit.target.copy(c); camP.position.copy(c.clone().add(dir.multiplyScalar(r / Math.tan(THREE.MathUtils.degToRad(camP.fov / 2)) * 0.6)));
+}
+function view(kind) {
+  if (kind === 'persp') { cam = camP; tc.camera = camP; orbit.object = camP; orbit.enableRotate = true; return; }
+  const c = orbit.target.clone(); const dist = 60; camO.top = 12; camO.bottom = -12; resize();
+  camO.position.copy(c).add(kind === 'top' ? new THREE.Vector3(0, dist, 0.001) : new THREE.Vector3(0, 0, dist)); camO.lookAt(c); cam = camO; tc.camera = camO; orbit.object = camO; orbit.enableRotate = false;
+}
+$('#vTop').onclick = () => view('top'); $('#vFront').onclick = () => view('front'); $('#vPersp').onclick = () => view('persp');
+addEventListener('keydown', (e) => {
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) { const s = REDO.pop(); if (s) { UNDO.push(snapshot()); restore(s); } } else { const s = UNDO.pop(); if (s) { REDO.push(snapshot()); restore(s); } } return; }
+  if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); save(); return; }
+  if (e.shiftKey && k === 'd') { e.preventDefault(); dup(); return; }
+  if (k === 'g') { tc.setMode('translate'); modeBtns('translate'); } else if (k === 'r') { tc.setMode('rotate'); modeBtns('rotate'); } else if (k === 's') { tc.setMode('scale'); modeBtns('scale'); }
+  else if (k === 'x' || k === 'delete') del(); else if (k === 'f' || e.code === 'NumpadDecimal') frame(); else if (k === 'home') frame(false);
+  else if (k === 'h' && SEL) { pushUndo(); const d = descOf(SEL); d.h = !d.h; objOf(SEL).visible = !d.h; outliner(); markDirty(); }
+  else if (e.code === 'Numpad7') view('top'); else if (e.code === 'Numpad1') view('front'); else if (e.code === 'Numpad0' || e.code === 'Numpad5') view('persp');
+  else if (k === 'escape') select(null);
+});
+// ───────── Suelo, hora, proyecto ─────────
+function setGround(v) { STATE.ground = v; grid.visible = v === 'grid'; groundMesh.visible = v === 'grass'; shadowCatcher.visible = v !== 'grass'; shadowCatcher.material = v === 'grid' ? floorMat : catchMat; grid.position.y = 0.002; $('#ground').value = v; }
+$('#ground').onchange = () => { pushUndo(); setGround($('#ground').value); markDirty(); };
+$('#tod').onchange = () => { pushUndo(); setTOD($('#tod').value); markDirty(); };
+const qs = new URLSearchParams(location.search);
+const cfg = await api('/api/config').catch(() => ({}));
+$('#proj').value = qs.get('project') || cfg.project || 'MiJuego';
+async function loadLib() {
+  const all = await api('/api/assets').catch(() => []);
+  TEXLIST = all.filter((a) => a.kind === '2d' && a.category === '2d-texture').map((a) => ({ name: a.name, url: a.url + (a.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png') }));
+  return all;
+}
+$('#addLib').onclick = async (e) => {
+  const all = await loadLib(); const glbs = all.filter((a) => a.kind === '3d' && a.files.some((f) => /\.glb$/i.test(f)) && a.id !== ASSET?.id);
+  const m = $('#menu'); m.innerHTML = '<div class="h">Modelos 3D de la biblioteca</div>' + (glbs.length ? glbs.map((a) => `<div data-id="${a.id}">◆ ${a.name}</div>`).join('') : '<div class="h">No hay modelos .glb todavía</div>');
+  m.style.left = '10px'; m.style.top = '50px'; m.classList.add('show');
+  m.onclick = (ev) => { const it = ev.target.closest('[data-id]'); if (!it) return; const a = glbs.find((x) => x.id === it.dataset.id); const f = a.files.find((x) => /_optimized\.glb$/.test(x)) || a.files.find((x) => /^model\.glb$/.test(x)) || a.files.find((x) => /\.glb$/i.test(x)); add('model', { name: a.name, src: a.url + f }); m.classList.remove('show'); };
+};
+$('#bOpen').onclick = async () => {
+  const all = await loadLib(); const sc = all.filter((a) => a.category === '3d-scene' && a.files.includes('scene.json'));
+  const m = $('#menu'); m.innerHTML = '<div class="h">Escenas guardadas</div>' + (sc.length ? sc.map((a) => `<div data-id="${a.id}">▣ ${a.name} <span style="color:var(--dim)">· ${a.project}</span></div>`).join('') : '<div class="h">Aún no hay escenas</div>');
+  m.style.left = '10px'; m.style.top = '6px'; m.classList.add('show');
+  m.onclick = async (ev) => { const it = ev.target.closest('[data-id]'); if (!it) return; m.classList.remove('show'); await openScene(sc.find((x) => x.id === it.dataset.id)); };
+};
+async function openScene(a) {
+  const j = await (await fetch(a.url + 'scene.json?t=' + Date.now())).json();
+  ASSET = a; $('#sName').value = a.name; $('#proj').value = a.project; UNDO = []; REDO = [];
+  STATE.objs = j.objs || []; setTOD(j.tod || 'day'); $('#tod').value = STATE.tod; setGround(j.ground || 'grid'); SEL = null; rebuild(); frame(false); DIRTY = false; $('#saved').textContent = 'abierta: ' + a.name;
+  history.replaceState(null, '', '?id=' + a.id);
+}
+$('#bNew').onclick = () => { if (DIRTY && !confirm('¿Descartar los cambios sin guardar?')) return; ASSET = null; STATE.objs = []; UNDO = []; REDO = []; SEL = null; rebuild(); $('#sName').value = 'mi_escena'; history.replaceState(null, '', location.pathname); DIRTY = false; $('#saved').textContent = ''; };
+// ───────── Exportar y guardar ─────────
+function exportGLB() {
+  readBack(); tc.detach();
+  return new Promise((res, rej) => new GLTFExporter().parse(world, (buf) => { if (SEL) tc.attach(objOf(SEL)); res(buf); }, (err) => { if (SEL) tc.attach(objOf(SEL)); rej(err); }, { binary: true, onlyVisible: true }));
+}
+const toB64 = (buf) => { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return 'data:model/gltf-binary;base64,' + btoa(s); };
+function shot(w = 1600, h = 900) {
+  const prev = [renderer.getSize(new THREE.Vector2()), camP.aspect]; const show = [tc.visible, grid.visible]; tc.visible = false; if (STATE.ground === 'grid') grid.visible = false;
+  renderer.setSize(w, h, false); camP.aspect = w / h; camP.updateProjectionMatrix(); renderer.render(scene, cam); const url = renderer.domElement.toDataURL('image/png');
+  tc.visible = show[0]; grid.visible = show[1]; resize(); return url;
+}
+$('#bGlb').onclick = async () => { try { const buf = await exportGLB(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'model/gltf-binary' })); a.download = ($('#sName').value || 'escena') + '.glb'; a.click(); } catch (e) { toast(e.message, 1); } };
+$('#bShot').onclick = () => { const a = document.createElement('a'); a.href = shot(1920, 1080); a.download = ($('#sName').value || 'escena') + '.png'; a.click(); };
+async function save() {
+  if (!STATE.objs.length) return toast('La escena está vacía', 1);
+  try {
+    readBack(); const glb = toB64(await exportGLB()); const json = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(snapshot())));
+    const thumb = shot(768, 512), render = shot(1600, 900);
+    if (ASSET) {
+      for (const [n, d] of [['model.glb', glb], ['scene.json', json], ['thumb.png', thumb], ['render.png', render]]) ASSET = await api(`/api/assets/${ASSET.id}/file`, { method: 'POST', body: JSON.stringify({ name: n, data: d }) });
+    } else {
+      ASSET = await api('/api/assets', { method: 'POST', body: JSON.stringify({ name: $('#sName').value, project: $('#proj').value, kind: '3d', category: '3d-scene', tags: ['scene', 'editor'], prompt: `Escena 3D con ${STATE.objs.length} objetos`, files: { 'model.glb': glb, 'scene.json': json, 'thumb.png': thumb, 'render.png': render } }) });
+      history.replaceState(null, '', '?id=' + ASSET.id);
+    }
+    DIRTY = false; $('#saved').textContent = '✓ guardada en la biblioteca'; toast('Guardada: en el estudio puedes optimizarla y renderizarla con Blender (LODs, FBX, sprites)');
+  } catch (e) { toast(e.message, 1); }
+}
+$('#bSave').onclick = save;
+addEventListener('beforeunload', (e) => { if (DIRTY) { e.preventDefault(); e.returnValue = ''; } });
+
+// ───────── Arranque: abre una escena (?id=) o crea una de ejemplo ─────────
+setTOD('day'); setGround('grid');
+await loadLib();
+const startId = qs.get('id');
+const startA = startId && (await api('/api/assets/' + startId).catch(() => null));
+if (startA && startA.files.includes('scene.json')) await openScene(startA);
+else if (startA && startA.files.some((f) => /\.glb$/i.test(f))) { const f = startA.files.find((x) => /_optimized\.glb$/.test(x)) || startA.files.find((x) => /\.glb$/i.test(x)); add('model', { name: startA.name, src: startA.url + f }); UNDO = []; frame(false); }
+else {
+  // escena de ejemplo: una casita con el kit modular
+  const P = (type, p, r = [0, 0, 0], extra = {}) => STATE.objs.push({ id: uid(), type, name: T[type].l, p, r, s: [1, 1, 1], mat: { ...(T[type].m || {}) }, seed: STATE.objs.length + 3, ...extra });
+  P('floor', [0, 0, 0]); P('doorway', [0, 0.2, 2]); P('wall', [0, 0.2, -2]); P('wallwin', [2, 0.2, 0], [0, Math.PI / 2, 0]); P('wallwin', [-2, 0.2, 0], [0, Math.PI / 2, 0]);
+  P('roof', [0, 3.2, 0], [0, Math.PI / 2, 0]); P('tree', [5.5, 0, -2.5]); P('pine', [-5, 0, -3]); P('rock', [4, 0, 3], [0, 0.6, 0]); P('bush', [-3.2, 0, 3]); P('fence', [6, 0, 3], [0, Math.PI / 2, 0]); P('barrel', [2.6, 0, 2.6]); P('crate', [-2.8, 0, 2.4]);
+  P('plight', [0, 2.2, 2.6], [0, 0, 0], { mat: { color: '#ffb866', power: 25 } });
+  rebuild(); frame(false); DIRTY = false;
+}
+</script>
+</body>
+</html>

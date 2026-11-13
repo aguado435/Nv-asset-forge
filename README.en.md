@@ -30,6 +30,7 @@
 | **Auto clean-up** | Sprites come back without background and cropped; VFX get luminance alpha; pixel styles also get a real pixel-art version at native resolution with a closed palette | Browser |
 | **Job queue** | Run several jobs at once without blocking the app, with progress, per-job log and cancel (also stops Blender) | Local |
 | **Autotiles** | Two textures → a seamless 16-tile corner terrain set (pixel with outline or soft HD) + Tiled `.tsx` + Godot 4 `.tres` with terrains configured | Browser |
+| **3D scene editor** | Blender-style editor in the browser: gizmos and G/R/S, Shift+D, X, H, F, Ctrl+Z shortcuts; outliner and properties; primitives, modular kit (walls, windows, doors, roofs, stairs, arches, columns, fences), nature and lights; GLB models from your library; your pack textures on any object; time of day; GLB export and save as an asset to optimize and render with Blender | Browser |
 | **Map painter** | Paint levels with your autotiles (brush, random, undo) and save PNG, Tiled map (`.tmx`) and Godot 4 scene (`.tscn`) | Browser |
 | **2D lighting** | Normal map for any sprite with an interactive light preview, for Godot `CanvasTexture` and Unity Sprite Lit | Browser |
 | **Shared palette** | Selected sprites (or a whole pack) are remapped to exactly the same color palette; saves `palette.png` | Browser |

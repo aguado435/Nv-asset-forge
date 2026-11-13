@@ -33,6 +33,7 @@
 | **Cola de trabajos** ★ | Lanza varios trabajos a la vez sin bloquear la app, con progreso, registro por trabajo y botón de cancelar (también detiene Blender) | Local |
 | **Pack coherente** ★ | Una frase → un LLM diseña la biblia de estilo y la lista de assets (héroe, enemigos, props, iconos, texturas, fondo, VFX) y FLUX los pinta todos con las mismas reglas visuales | NVIDIA |
 | **Autotiles** ★ | Dos texturas → tileset de 16 tiles con transición orgánica por esquinas (pixel con contorno o HD suave) + `.tsx` de Tiled + `.tres` de Godot 4 con terreno ya configurado | Local (navegador) |
+| **Editor de escenas 3D** ★ | Editor tipo Blender en el navegador: gizmos y atajos G/R/S, Mayús+D, X, H, F, Ctrl+Z; outliner y propiedades; primitivas, kit modular (muros, ventanas, puertas, tejados, escaleras, arcos, columnas, vallas), naturaleza y luces; modelos GLB de tu biblioteca; texturas de tus packs en cualquier objeto; hora del día; exporta GLB y guarda la escena como asset para optimizarla y renderizarla con Blender | Local (navegador) |
 | **Pintor de mapas** ★ | Pinta niveles con tus autotiles (pincel, aleatorio, deshacer) y guárdalos como PNG, mapa de Tiled (`.tmx`) y escena de Godot 4 (`.tscn`) | Local (navegador) |
 | **Luz 2D** ★ | Normal map de cualquier sprite con vista previa de luz interactiva (mueve el ratón), para Godot `CanvasTexture` y Unity Sprite Lit | Local (navegador) |
 | **Paleta común** ★ | Los sprites marcados (o un pack entero) pasan a compartir exactamente la misma paleta de colores; guarda `palette.png` | Local (navegador) |
@@ -191,6 +192,11 @@ En la app (panel *Diseñador de mundos*):
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/kanto.json --res 1600x900
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/aethermoor.json --shot play0 --time dusk
 ```
+
+## Editor de escenas 3D
+
+![Editor de escenas 3D tipo Blender](docs/img/scene_editor.jpg)
+*Botón 🧊 Escena 3D (o 🧊 Abrir en escena sobre cualquier modelo): compón niveles y props con el kit modular y tus modelos, y guárdalos en la biblioteca.*
 
 ## Coherencia: recetas, favoritos y biblia de estilo
 
