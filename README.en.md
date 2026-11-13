@@ -9,12 +9,13 @@
 - **Light:** only Node.js. Blender is optional but recommended.
 - Windows, macOS and Linux.
 
-![Aethermoor, a JRPG continent in cube 2D-HD style](docs/img/world.jpg)
+![NV Asset Forge: your game art studio](docs/img/promo_hero.jpg)
 
 | | |
 |---|---|
-| ![One-sentence coherent pack](docs/img/pack.jpg) | ![The Last Acre at dusk](docs/img/acre_dusk.jpg) |
-| ![Village at dusk, castle at night](docs/img/world_time.jpg) | ![2D-HD shot with pixel art characters](docs/img/party.jpg) |
+| ![Coherent pack from one sentence](docs/img/promo_pack.jpg) | ![Real pixel art](docs/img/promo_pixel.jpg) |
+| ![3D scene editor](docs/img/promo_scene.jpg) | ![Autotiles and map painter](docs/img/promo_maps.jpg) |
+| ![2D lighting with normal maps](docs/img/promo_light.jpg) | ![2D-HD worlds](docs/img/promo_world.jpg) |
 
 *Everything on this page was made with NV Asset Forge: textures, facades and sprites with FLUX.2 on NVIDIA Build, worlds assembled and rendered in Blender with the scripts in `examples/`.*
 
@@ -46,8 +47,8 @@
 
 ## Real pixel art
 
-![Before and after the new pixel art](docs/img/pixel_v2.jpg)
-*Left of each trio: averaged downscale (before). Center and right: the new engine, every pixel takes its block's dominant color, stray pixels are cleaned, selective or dark outline, and classic palettes (PICO-8, Sweetie 16, Endesga 32) or an automatic one.*
+![Real pixel art: from AI illustration to sprite](docs/img/promo_pixel.jpg)
+*Dominant color per cell in OKLab, binary alpha, outline only on the outer silhouette (eyes and faces stay intact), soft 2×2 Bayer dithering and one shared palette for sprite sheets. PICO-8, Sweetie 16, Endesga 32 or automatic palettes.*
 
 ## Install (once)
 

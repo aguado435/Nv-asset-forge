@@ -10,14 +10,13 @@
 - Windows, macOS y Linux.
 - **Pruébalo sin instalar**: [Forge Lite](https://aguado435.github.io/Nv-asset-forge/#lite) quita fondos, crea pixel art real y autotiles en tu navegador.
 
-![Aethermoor, continente JRPG en estilo cúbico 2D-HD](docs/img/world.jpg)
+![NV Asset Forge: tu estudio de arte para videojuegos](docs/img/promo_hero.jpg)
 
 | | |
 |---|---|
-| ![Plano de juego 2D-HD con personajes pixel art](docs/img/party.jpg) | ![El abismo y la ciudadela](docs/img/abyss.jpg) |
-| ![Zonas del continente](docs/img/zones.jpg) | ![Assets 2D generados con FLUX.2 en ~2 s](docs/img/flux2.jpg) |
-
-![Elenco de NPCs en pixel art real](docs/img/npcs.jpg)
+| ![Pack coherente desde una frase](docs/img/promo_pack.jpg) | ![Pixel art de verdad](docs/img/promo_pixel.jpg) |
+| ![Editor de escenas 3D](docs/img/promo_scene.jpg) | ![Autotiles y pintor de mapas](docs/img/promo_maps.jpg) |
+| ![Luz 2D con normal maps](docs/img/promo_light.jpg) | ![Mundos 2D-HD](docs/img/promo_world.jpg) |
 
 *Todo lo de esta página está generado con NV Asset Forge: texturas, fachadas y sprites con FLUX.2 (NVIDIA Build) y mundos montados y renderizados en Blender con los scripts de `examples/`.*
 
@@ -180,8 +179,8 @@ En la app (panel *Diseñador de mundos*):
 4. **Edita la receta** a mano en el propio panel y reconstruye sin LLM.
 5. Elige **hora del día** (día, amanecer, atardecer, noche: sol, cielo, faroles y ventanas cambian juntos) y genera **vistas de juego**: cámara RPG elevada y cercana sobre cada lugar emblemático, como la que verá el jugador.
 
-![Vistas de juego: aldea al atardecer y castillo de noche](docs/img/world_time.jpg)
-*Vistas de juego generadas automáticamente: la aldea al atardecer y el castillo de noche con las ventanas encendidas.*
+![Mundos 2D-HD desde una receta](docs/img/promo_world.jpg)
+*Vistas de juego generadas automáticamente: día, atardecer y noche con ventanas y faroles encendidos.*
 
 ![Plantillas de geografía real](docs/img/templates.jpg)
 *Plantillas editables: Kanto, Madagascar y Australia en estilo cúbico 2D-HD.*
@@ -196,13 +195,13 @@ blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/aetherm
 
 ## Pixel art de verdad
 
-![Antes y después del nuevo pixel art](docs/img/pixel_v2.jpg)
-*Izquierda de cada trío: reducción por media (antes). Centro y derecha: el nuevo motor, cada píxel con el color dominante de su bloque, limpieza de motas, contorno selectivo u oscuro y paletas clásicas (PICO-8, Sweetie 16, Endesga 32) o automática.*
+![Pixel art de verdad: de ilustración IA a sprite](docs/img/promo_pixel.jpg)
+*Color dominante por celda en OKLab, alfa binario, contorno solo en la silueta (ojos y caras intactos), dithering Bayer 2×2 suave y paleta común para sprite sheets. Paletas PICO-8, Sweetie 16, Endesga 32 o automática.*
 
 ## Editor de escenas 3D
 
-![Editor de escenas 3D tipo Blender](docs/img/scene_editor.jpg)
-*Botón 🧊 Escena 3D (o 🧊 Abrir en escena sobre cualquier modelo): compón niveles y props con el kit modular y tus modelos, y guárdalos en la biblioteca.*
+![Editor de escenas 3D con calidad de estudio](docs/img/promo_scene.jpg)
+*Botón 🧊 Escena 3D (o 🧊 Abrir en escena sobre cualquier modelo): cielo físico con IBL, oclusión ambiental (GTAO), bloom, agua con shader, maqueta flotante, texturas PBR procedurales y escenas por IA. Guarda en la biblioteca y exporta GLB.*
 
 ## Coherencia: recetas, favoritos y biblia de estilo
 
@@ -214,11 +213,11 @@ Los modelos de NVIDIA Build no se pueden reentrenar desde la API gratuita, así 
 
 ## Packs, autotiles y exportación
 
-![Pack coherente generado desde una frase](docs/img/pack.jpg)
-*"Cozy farming RPG on a floating island" → 8 assets con la misma biblia de estilo (pixel art 16-bit): héroe, enemigo, props, icono, dos texturas de suelo y un VFX.*
+![Pack coherente desde una frase](docs/img/promo_pack.jpg)
+*"Cozy farming RPG on a floating island" → 8 assets con la misma biblia de estilo, sin fondo y recortados.*
 
-![Autotile en la app](docs/img/ui_autotile.jpg)
-*Autotile hierba + tierra labrada generado en el navegador a partir de dos texturas del pack, con su `.tsx` y su `.tres`.*
+![Autotiles y pintor de mapas](docs/img/promo_maps.jpg)
+*Hierba + tierra labrada del pack → tileset de 16 tiles → mapa pintado, con `.tsx`/`.tmx` de Tiled y `.tres`/`.tscn` de Godot 4.*
 
 - **Pack coherente**: panel *Pack coherente*, describe el juego ("roguelike de criptas élficas: héroe, 3 enemigos, cofre, pociones, iconos, suelo, fondo") y elige cuántos assets. Todos comparten la misma biblia de estilo (que además se guarda como guía del proyecto) y quedan etiquetados `pack:nombre` en la biblioteca.
 - **Autotiles**: abre una textura, elige el segundo terreno en *Tileset*, el tamaño de tile y el modo (*Pixel + contorno* o *Suave HD*). Se guardan en el asset el tileset PNG (4×4 tiles, terreno por esquinas), una vista previa de mapa, el `.tsx` (Wang set de esquinas para Tiled) y el `.tres` (TileSet de Godot 4 con terrain set *Match Corners*). El ruido de la frontera es periódico, así que los tiles encajan sin costuras en cualquier combinación.
