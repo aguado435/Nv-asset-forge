@@ -84,6 +84,8 @@ function publicConfig(cfg) {
     anims: Object.fromEntries(Object.entries(ANIMS).map(([k, a]) => [k, `${a.label} · ${a.frames.length} fot.`])),
     types: Object.fromEntries(Object.entries(TYPES).map(([id, t]) => [id, { label: t.label, kind: t.kind, group: t.group, size: t.size, hint: t.hint }])),
     styles: Object.fromEntries(Object.entries(STYLES).map(([id, s]) => [id, s.label])),
+    pixelStyles: Object.keys(STYLES).filter((k) => STYLES[k].px),
+    presets: PRESETS,
   };
 }
 
@@ -318,7 +320,15 @@ const TYPES = {
 };
 const STYLES = {
   auto: { label: 'Automático', p: '' },
-  pixel: { label: 'Pixel art 16-bit', p: '16-bit pixel art, crisp pixels, limited color palette, clean dark outlines' },
+  pixel: { label: 'Pixel art 16-bit', p: '16-bit pixel art, crisp pixels, limited color palette, clean dark outlines', px: 1 },
+  hd2d: { label: '★ HD-2D (pixel + luz cinematográfica)', px: 1, p: 'high-resolution 32-bit pixel art sprite, crisp readable pixel clusters, soft painterly sub-shading, warm cinematic key light with cool rim light, rich jewel-tone palette, clean dark outline, premium JRPG quality' },
+  cozy: { label: '★ Cozy pixel (granja / vida)', px: 1, p: 'cozy pixel art, soft rounded chunky shapes, warm pastel palette, gentle shading, friendly proportions, clean dark brown outline, charming farming-sim feel' },
+  gothicpx: { label: '★ Metroidvania gótico (pixel)', px: 1, p: 'detailed 32-bit pixel art, moody gothic palette of deep blues, crimson and bone white, strong silhouette, high-contrast rim lighting, ornate details, clean outline' },
+  soulslike: { label: '★ Fantasía sombría pintada', p: 'grim dark fantasy painted game art, desaturated earthy palette with one ember accent, heavy chiaroscuro lighting, worn weathered materials, gothic ornament, painterly texture' },
+  mobile: { label: '★ Casual móvil brillante', p: 'polished casual mobile game art, chunky rounded shapes, bright saturated candy colors, soft gradients and glossy highlights, thick clean outline, playful and readable' },
+  isometric: { label: '★ Isométrico estratégico', p: 'isometric game art at a consistent 30 degree angle, clean readable forms, soft ambient occlusion, crisp edges, consistent top-left lighting, strategy game quality' },
+  inked: { label: '★ Cómic entintado', p: 'hand-inked comic game art, bold confident brush lines, flat colors with halftone shading, dynamic silhouette, limited bold palette' },
+  storybook: { label: '★ Cuento acuarela', p: 'storybook watercolor game art, soft washes with ink linework, gentle paper texture, warm muted palette, whimsical shapes' },
   handpainted: { label: 'Stylized hand-painted', p: 'stylized hand-painted game art, painterly brushwork, vibrant saturated colors, exaggerated proportions' },
   cartoon: { label: 'Cartoon / cel-shading', p: 'cartoon cel-shaded style, bold clean outlines, flat vibrant colors' },
   anime: { label: 'Anime', p: 'anime style, clean line art, cel shading' },
@@ -352,9 +362,16 @@ function fallbackPlan(prompt, category, style, bible = '') {
     source: 'plantilla',
   };
 }
-async function enhancePrompt(cfg, prompt, category, style, bible = '') {
+async function favoriteExamples(cfg, project, category, n = 4) {
+  // "Aprender de tus favoritos": los prompts de los assets marcados con ★ guían a los nuevos (few-shot, sin reentrenar)
+  const favs = (await listAssets(cfg)).filter((a) => a.favorite && a.project === project && a.imagePrompt);
+  favs.sort((a, b) => (b.category === category) - (a.category === category));
+  return favs.slice(0, n).map((a) => ({ category: a.category, prompt: String(a.imagePrompt).slice(0, 700) }));
+}
+async function enhancePrompt(cfg, prompt, category, style, bible = '', favs = []) {
   const T = TYPES[category], S = STYLES[style] || STYLES.auto;
-  const user = `Asset type: ${T.label}\nFraming rules (mandatory): ${T.guide}\nArt style: ${S.p || (bible ? 'follow the project art bible' : 'choose the most fitting professional game art style for the request')}\n${bible ? `Project art bible (mandatory, every asset of this game must share it): ${bible}\n` : ''}User request: ${prompt}`;
+  const ex = favs.length ? `Approved prompts from this project (the art director starred these results; match their art style, rendering vocabulary, palette and structure exactly, but not their subjects):\n${favs.map((f, i) => `${i + 1}. [${f.category}] ${f.prompt}`).join('\n')}\n` : '';
+  const user = `Asset type: ${T.label}\nFraming rules (mandatory): ${T.guide}\nArt style: ${S.p || (bible ? 'follow the project art bible' : 'choose the most fitting professional game art style for the request')}\n${bible ? `Project art bible (mandatory, every asset of this game must share it): ${bible}\n` : ''}${ex}User request: ${prompt}`;
   const j = await llmJSON(cfg, ENHANCE_SYS, user);
   if (!j.image_prompt) throw new Error('JSON incompleto');
   return {
@@ -383,10 +400,11 @@ async function runPack(cfg, job, o, log, quality, project) {
   const proj = await loadProject(cfg, project);
   const bible = String(proj.bible || '').trim();
   const only = Array.isArray(o.categories) ? o.categories.filter((c) => PACK_CATS.includes(c)) : [];
-  log(`Planificando un pack de ${count} assets con ${llmLabel(cfg)}…`);
+  const favs = await favoriteExamples(cfg, project, '', 3);
+  log(`Planificando un pack de ${count} assets con ${llmLabel(cfg)}${favs.length ? ` (aprendiendo de ${favs.length} favorito(s) ★)` : ''}…`);
   let plan;
   try {
-    plan = await llmJSON(cfg, PACK_SYS, `Request: ${prompt}\nNumber of assets: exactly ${count}\n${only.length ? `Allowed categories: ${only.join(', ')}\n` : ''}${STYLES[style].p ? `Mandatory art style: ${STYLES[style].p}\n` : ''}${bible ? `Existing project art bible (keep it, refine it): ${bible}\n` : ''}`, 5000);
+    plan = await llmJSON(cfg, PACK_SYS, `Request: ${prompt}\nNumber of assets: exactly ${count}\n${only.length ? `Allowed categories: ${only.join(', ')}\n` : ''}${STYLES[style].p ? `Mandatory art style: ${STYLES[style].p}\n` : ''}${bible ? `Existing project art bible (keep it, refine it): ${bible}\n` : ''}${favs.length ? `Starred example prompts of this project (derive the style bible from them):\n${favs.map((f) => '- ' + f.prompt).join('\n')}\n` : ''}`, 5000);
   } catch (e) { throw new Error('El LLM no pudo planificar el pack: ' + short(e.message)); }
   const items = (Array.isArray(plan.assets) ? plan.assets : []).filter((a) => a && a.subject).slice(0, count)
     .map((a) => ({ name: slugName(a.name || a.subject), category: PACK_CATS.includes(a.category) ? a.category : (only[0] || '2d-item'), subject: String(a.subject).slice(0, 600) }));
@@ -409,6 +427,7 @@ async function runPack(cfg, job, o, log, quality, project) {
     const bgRule = T.bg === 'white' ? 'isolated on a plain pure white background, no shadow, no text' : T.bg === 'black' ? 'on a plain pure black background, no text' : 'no text, no UI';
     const head = `${fitPrompt(it.subject, 260)}. ${frame}. `, tail = `. ${bgRule}.`;
     const image_prompt = head + fitPrompt(styleBible, 790 - head.length - tail.length) + tail;
+    job.progress = i / items.length;
     log(`[${i + 1}/${items.length}] ${it.name} (${T.label})…`);
     try {
       const img = await genImage(cfg, { prompt: image_prompt, width: w, height: h, quality, seed: baseSeed + i, model: imgKey });
@@ -481,6 +500,36 @@ async function exportPack(cfg, ids, engine) {
 
 // ───────────────────────── Biblioteca local ─────────────────────────
 const safeName = (s) => String(s || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+// Recetas de estudio: prompts de partida probados (tema + tipo + estilo). El LLM los convierte en el brief final.
+const PRESETS = [
+  { g: 'Personajes', n: 'Héroe aventurero', c: '2d-character', s: 'hd2d', p: 'joven aventurero con capa corta, espada a la cintura, mochila de cuero y bufanda al viento, mirada decidida' },
+  { g: 'Personajes', n: 'Maga elfa', c: '2d-character', s: 'hd2d', p: 'maga elfa con túnica verde bosque bordada en oro, bastón de madera viva con un cristal brillante, orejas largas, pelo plateado' },
+  { g: 'Personajes', n: 'Enano herrero', c: '2d-character', s: 'gothicpx', p: 'enano herrero robusto con barba trenzada, delantal de cuero chamuscado, martillo enorme al hombro' },
+  { g: 'Personajes', n: 'Caballero oscuro (jefe)', c: '2d-character', s: 'soulslike', p: 'caballero caído gigantesco con armadura negra agrietada, capa hecha jirones, espadón dentado, brasas saliendo de las grietas' },
+  { g: 'Personajes', n: 'Granjera cozy', c: '2d-character', s: 'cozy', p: 'granjera sonriente con sombrero de paja, peto vaquero, regadera en la mano y un pollito en el hombro' },
+  { g: 'Enemigos', n: 'Slime', c: '2d-character', s: 'cozy', p: 'slime gelatinoso translúcido con ojitos grandes y una hoja pegada en la cabeza' },
+  { g: 'Enemigos', n: 'Esqueleto guerrero', c: '2d-character', s: 'gothicpx', p: 'esqueleto guerrero con escudo redondo roto, casco oxidado y espada corta mellada' },
+  { g: 'Enemigos', n: 'Gólem de piedra', c: '2d-character', s: 'hd2d', p: 'gólem de piedra musgosa con runas azules brillantes en el pecho y cristales en los hombros' },
+  { g: 'Objetos', n: 'Cofre del tesoro', c: '2d-item', s: 'hd2d', p: 'cofre de madera reforzado con hierro y remaches de oro, entreabierto con monedas y gemas asomando' },
+  { g: 'Objetos', n: 'Poción de vida', c: '2d-item', s: 'pixel', p: 'frasco de cristal redondo con líquido rojo brillante, tapón de corcho y etiqueta de pergamino atada con cordel' },
+  { g: 'Objetos', n: 'Espada legendaria', c: '2d-item', s: 'hd2d', p: 'espada legendaria con hoja de plata grabada con runas, guarda en forma de alas y gema azul en el pomo' },
+  { g: 'Iconos', n: 'Iconos de habilidad', c: '2d-icon', s: 'soulslike', p: 'icono de habilidad: bola de fuego espiral naranja sobre fondo circular oscuro' },
+  { g: 'Iconos', n: 'Moneda', c: '2d-icon', s: 'mobile', p: 'moneda de oro gruesa con una estrella grabada y brillo especular' },
+  { g: 'Texturas', n: 'Hierba', c: '2d-texture', s: 'hd2d', p: 'césped corto denso con tréboles y pequeñas flores blancas dispersas' },
+  { g: 'Texturas', n: 'Adoquines', c: '2d-texture', s: 'hd2d', p: 'adoquines de piedra gris irregulares con musgo entre las juntas' },
+  { g: 'Texturas', n: 'Tierra de camino', c: '2d-texture', s: 'hd2d', p: 'tierra de camino compacta con piedrecillas y huellas leves' },
+  { g: 'Texturas', n: 'Arena de playa', c: '2d-texture', s: 'cozy', p: 'arena de playa fina con conchas pequeñas y ondas suaves' },
+  { g: 'Fondos', n: 'Bosque encantado', c: '2d-environment', s: 'storybook', p: 'claro de bosque encantado con árboles enormes, rayos de luz, luciérnagas y un camino que se pierde al fondo' },
+  { g: 'Fondos', n: 'Mazmorra', c: '2d-environment', s: 'gothicpx', p: 'pasillo de mazmorra con antorchas, cadenas colgando, charcos que reflejan la luz y una puerta de hierro al fondo' },
+  { g: 'Fondos', n: 'Pueblo al atardecer', c: '2d-environment', s: 'hd2d', p: 'plaza de pueblo medieval al atardecer con faroles encendidos, fuente central y casas con entramado de madera' },
+  { g: 'UI', n: 'Panel de diálogo', c: '2d-ui', s: 'hd2d', p: 'marco de caja de diálogo de madera oscura con esquinas de latón ornamentadas y pergamino interior' },
+  { g: 'UI', n: 'Barras de vida y maná', c: '2d-ui', s: 'gothicpx', p: 'marco ornamentado para barras de vida y maná con calavera central y bordes de hierro' },
+  { g: 'VFX', n: 'Impacto mágico', c: '2d-vfx', s: 'hd2d', p: 'explosión de energía mágica azul y blanca con chispas y anillo de choque' },
+  { g: 'VFX', n: 'Curación', c: '2d-vfx', s: 'cozy', p: 'aura de curación verde con hojitas y destellos ascendiendo en espiral' },
+  { g: '3D', n: 'Taberna medieval', c: '3d-blender', s: 'auto', p: 'taberna medieval de dos plantas con tejado de pizarra, chimenea de piedra, cartel colgante y barriles en la puerta' },
+  { g: '3D', n: 'Pozo de piedra', c: '3d-blender', s: 'auto', p: 'pozo de piedra con tejadillo de madera, cubo y manivela' },
+];
+
 const TRASH = '_papelera';
 
 function urlFor(cfg, dir) {
@@ -529,7 +578,7 @@ async function createAsset(cfg, meta, files) {
 const jobs = new Map();
 function newJob() {
   const id = crypto.randomBytes(6).toString('hex');
-  const job = { id, status: 'running', log: [], assets: [], error: null, created: Date.now() };
+  const job = { id, status: 'running', log: [], assets: [], error: null, created: Date.now(), progress: null, label: '', kind: '' };
   jobs.set(id, job);
   for (const [k, j] of jobs) if (Date.now() - j.created > 3 * 3600e3) jobs.delete(k);
   return job;
@@ -634,6 +683,7 @@ function runBlender(bin, args, log) {
     const f = path.join(os.tmpdir(), `nvf_${Date.now()}_${crypto.randomBytes(3).toString('hex')}.json`);
     fs.writeFileSync(f, JSON.stringify(args));
     const p = spawn(bin, ['-b', '--factory-startup', '-P', BLENDER_SCRIPT, '--', f], { windowsHide: true });
+    if (log.job) log.job.child = p;
     let result = null, err = null, carry = '';
     const tail = [];
     const onData = (chunk) => {
@@ -1024,6 +1074,7 @@ async function listWorldTemplates() {
 function runWorldgen(bin, args, log) {
   return new Promise((resolve, reject) => {
     const p = spawn(bin, ['-b', '--factory-startup', '-P', WORLDGEN, '--', ...args], { windowsHide: true, cwd: WORLD_DIR });
+    if (log.job) log.job.child = p;
     let carry = ''; const tail = [];
     const onData = (chunk) => {
       const lines = (carry + chunk).split(/\r?\n/); carry = lines.pop();
@@ -1124,7 +1175,11 @@ const codeModelLabel = (cfg) => (cfg.llmProvider === 'local' ? llmLabel(cfg) : c
 // ───────────────────────── Trabajos principales ─────────────────────────
 async function runJob(job, o) {
   const cfg = loadConfig();
-  const log = (m) => { job.log.push(`${new Date().toLocaleTimeString('es-ES')}  ${m}`); console.log('  ' + m); };
+  const log = (m) => {
+    if (job.cancelled) { const e = new Error('Cancelado por el usuario.'); e.cancelled = true; throw e; } // cada línea de log es un punto de cancelación
+    job.log.push(`${new Date().toLocaleTimeString('es-ES')}  ${m}`); console.log('  ' + m);
+  };
+  log.job = job;
   const quality = ['draft', 'normal', 'high'].includes(o.quality) ? o.quality : 'normal';
   const project = safeName(o.project || cfg.project) || 'MiJuego';
   try {
@@ -1154,7 +1209,9 @@ async function runJob(job, o) {
     let plan = o.plan && o.plan.image_prompt ? { ...o.plan, name: slugName(o.plan.name || prompt), source: 'editado' } : null;
     if (!plan && o.enhance !== false) {
       log(`Optimizando prompt con ${llmLabel(cfg)}…`);
-      try { plan = await enhancePrompt(cfg, prompt, category, style, bible); log('Prompt optimizado.'); }
+      const favs = await favoriteExamples(cfg, project, category);
+      if (favs.length) log(`Aprendiendo de ${favs.length} favorito(s) ★ del proyecto.`);
+      try { plan = await enhancePrompt(cfg, prompt, category, style, bible, favs); log('Prompt optimizado.'); }
       catch (e) { log(`⚠ No se pudo optimizar (${short(e.message)}). Uso plantilla profesional local.`); }
     }
     if (!plan) plan = fallbackPlan(prompt, category, style, bible);
@@ -1173,6 +1230,7 @@ async function runJob(job, o) {
     for (let v = 0; v < variants; v++) {
       const seed = o.seed && variants === 1 ? clampInt(o.seed, 1, 2147483646, randSeed()) : randSeed();
       const tag = variants > 1 ? ` [${v + 1}/${variants}]` : '';
+      job.progress = v / variants;
       const meta = { name: plan.name, project, kind: T.kind, category, style, prompt, imagePrompt: plan.image_prompt, trellisPrompt: plan.trellis_prompt, tags: plan.tags || [], seed, quality, background: T.bg, styleRef: refBuf ? proj.refAssetId : undefined };
       if (T.kind === '2d') {
         log(`Generando imagen ${refBuf ? '' : `${w}×${h} `}con ${label} (${cfg.backend2d === 'local' ? 'NIM local' : 'NVIDIA cloud'})${tag}…`);
@@ -1194,8 +1252,9 @@ async function runJob(job, o) {
     }
     job.status = 'done';
   } catch (e) {
-    job.status = 'error'; job.error = e.message; log('✖ ' + e.message);
-  }
+    if (job.cancelled || e.cancelled) { job.status = 'cancelled'; job.error = 'Cancelado'; job.log.push(`${new Date().toLocaleTimeString('es-ES')}  ■ Cancelado. Lo ya generado se queda en la biblioteca.`); return; }
+    job.status = 'error'; job.error = e.message; job.log.push(`${new Date().toLocaleTimeString('es-ES')}  ✖ ${e.message}`);
+  } finally { job.child = null; job.ended = Date.now(); if (job.status === 'done') job.progress = 1; }
 }
 
 async function imageTo3D(cfg, buf, fallbackPrompt, quality, seed, log, model) {
@@ -1310,12 +1369,24 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/generate' && req.method === 'POST') {
       const b = await readBody(req); const job = newJob();
+      job.kind = String(b.action || b.category || 'asset').slice(0, 30); job.label = String(b.label || b.prompt || job.kind).slice(0, 90);
       runJob(job, b); return send(res, 200, { jobId: job.id });
     }
     let m;
+    if (p === '/api/jobs' && req.method === 'GET') {
+      const list = [...jobs.values()].sort((a, b) => b.created - a.created).slice(0, 30)
+        .map((j) => ({ id: j.id, label: j.label, kind: j.kind, status: j.status, progress: j.progress, created: j.created, ended: j.ended, last: j.log[j.log.length - 1] || '', error: j.error, assets: j.assets.length }));
+      return send(res, 200, list);
+    }
+    if ((m = p.match(/^\/api\/jobs\/([a-f0-9]+)\/cancel$/)) && req.method === 'POST') {
+      const j = jobs.get(m[1]); if (!j) return send(res, 404, { error: 'trabajo no encontrado' });
+      if (j.status === 'running') { j.cancelled = true; try { j.child && j.child.kill(); } catch {} }
+      return send(res, 200, { ok: true });
+    }
     if ((m = p.match(/^\/api\/jobs\/([a-f0-9]+)$/))) {
       const j = jobs.get(m[1]); if (!j) return send(res, 404, { error: 'trabajo no encontrado' });
-      return send(res, 200, { ...j, assets: j.assets.map(strip) });
+      const { child, ...pub } = j;
+      return send(res, 200, { ...pub, assets: j.assets.map(strip) });
     }
     if (p === '/api/assets' && req.method === 'GET') return send(res, 200, (await listAssets(loadConfig())).map(strip));
     if ((m = p.match(/^\/api\/assets\/([\w]+)$/))) {
@@ -1333,6 +1404,7 @@ const server = http.createServer(async (req, res) => {
         if (b.name) meta.name = slugName(b.name);
         if (Array.isArray(b.tags)) meta.tags = b.tags.map(String).slice(0, 12);
         if (b.notes !== undefined) meta.notes = String(b.notes).slice(0, 2000);
+        if (b.favorite !== undefined) meta.favorite = !!b.favorite;
         await fsp.writeFile(path.join(a.dir, 'meta.json'), JSON.stringify(meta, null, 2));
         return send(res, 200, strip(await readAsset(cfg, a.dir)));
       }

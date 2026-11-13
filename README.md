@@ -6,6 +6,7 @@
 - Local: el servidor corre en tu ordenador, tus assets se quedan en tu disco y la clave nunca sale de tu PC (salvo hacia NVIDIA).
 - Sin instalar nada raro: solo Node.js. Blender es opcional pero recomendado.
 - Windows, macOS y Linux.
+- **Pruébalo sin instalar**: [Forge Lite](https://aguado435.github.io/Nv-asset-forge/#lite) quita fondos, crea pixel art real y autotiles en tu navegador.
 
 ![Aethermoor, continente JRPG en estilo cúbico 2D-HD](docs/img/world.jpg)
 
@@ -24,6 +25,10 @@
 
 | Función | Qué hace | Dónde se ejecuta |
 |---|---|---|
+| **Recetas de estudio** ★ | 26 prompts de partida probados (personajes, enemigos, objetos, iconos, texturas, fondos, UI, VFX, 3D) y 8 estilos curados: HD-2D, cozy pixel, metroidvania gótico, fantasía sombría, casual móvil, isométrico, cómic, acuarela | — |
+| **Aprende de tus favoritos** ★ | Marca un asset con ★ y sus prompts se usan como ejemplos aprobados en cada generación y pack del proyecto: el estilo converge sin reentrenar el modelo | NVIDIA (LLM) |
+| **Limpieza automática** ★ | Sprites sin fondo y recortados al terminar; VFX con alfa por luminancia; en estilos pixel, una versión de pixel art real a resolución nativa con paleta cerrada | Local (navegador) |
+| **Cola de trabajos** ★ | Lanza varios trabajos a la vez sin bloquear la app, con progreso, registro por trabajo y botón de cancelar (también detiene Blender) | Local |
 | **Pack coherente** ★ | Una frase → un LLM diseña la biblia de estilo y la lista de assets (héroe, enemigos, props, iconos, texturas, fondo, VFX) y FLUX los pinta todos con las mismas reglas visuales | NVIDIA |
 | **Autotiles** ★ | Dos texturas → tileset de 16 tiles con transición orgánica por esquinas (pixel con contorno o HD suave) + `.tsx` de Tiled + `.tres` de Godot 4 con terreno ya configurado | Local (navegador) |
 | **Exportar a motor** ★ | ZIP listo para Godot 4 (`res://nvforge`), Unity (`Assets/NVForge`) o genérico, con `manifest.json` (prompt, semilla, modelo de cada asset) | Local |
@@ -181,6 +186,14 @@ En la app (panel *Diseñador de mundos*):
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/kanto.json --res 1600x900
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/aethermoor.json --shot play0 --time dusk
 ```
+
+## Coherencia: recetas, favoritos y biblia de estilo
+
+Los modelos de NVIDIA Build no se pueden reentrenar desde la API gratuita, así que la coherencia se consigue con tres capas que sí funcionan con cualquier modelo:
+
+1. **Recetas de estudio**: elige una en el desplegable de arriba y rellena tema, tipo y estilo con un punto de partida probado.
+2. **Biblia de estilo del proyecto**: un texto de reglas visuales (paleta, contorno, luz, nivel de detalle) que heredan todos los assets. Los packs la escriben solos si el proyecto no tiene una.
+3. **Favoritos ★**: los prompts de lo que marcas como favorito se pasan al LLM como ejemplos aprobados ("imita su estilo y estructura, no su tema"). Cuantos más favoritos, más estable el estilo del juego.
 
 ## Packs, autotiles y exportación
 

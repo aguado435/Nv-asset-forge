@@ -127,6 +127,19 @@ textarea{resize:vertical;min-height:84px}
 .box p{color:var(--muted);margin:0 0 6px;font-size:13px}
 .box .act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 .sep{height:1px;background:var(--line);margin:16px 0}
+.fav.on{color:#ffd166;border-color:#ffd166}
+.card .st{position:absolute;right:6px;top:4px;color:#ffd166;font-size:14px;text-shadow:0 1px 2px #000;z-index:2}
+.jobsbtn.on{border-color:var(--acc);color:var(--acc)} .jobsbtn span{font-weight:700;margin-left:4px}
+.jobsdock{position:fixed;right:18px;top:62px;width:380px;max-height:70vh;overflow:auto;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;z-index:50;display:none;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+.jobsdock.show{display:block}
+.jobsdock .jh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)} .jobsdock .jh .hint{flex:1;margin:0}
+.job{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer} .job:hover,.job.sel{background:rgba(255,255,255,.03)}
+.job .jt{display:flex;align-items:center;gap:8px} .job .jt b{flex:1;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job .js{font-size:11px;color:var(--muted)} .job.done .js{color:var(--ok)} .job.error .js{color:var(--err)} .job.cancelled .js{color:var(--warn)}
+.job .jl{font:11px/1.4 var(--mono);color:var(--dim);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:4px;border-radius:3px;background:#1a1e24;margin-top:7px;overflow:hidden} .bar i{display:block;height:100%;background:var(--acc);transition:width .4s}
+.job.error .bar i{background:var(--err)} .job.cancelled .bar i{background:var(--warn)}
+.bar.ind i{width:35%!important;animation:ind 1.3s ease-in-out infinite} @keyframes ind{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line2);padding:9px 14px;border-radius:9px;z-index:60;display:none;max-width:80vw}
 .toast.show{display:block}
 .toast.err{border-color:var(--err)}
@@ -155,6 +168,7 @@ details.sec summary::-webkit-details-marker{display:none}
   <div class="proj">Proyecto <input type="text" id="project" placeholder="MiJuego"></div>
   <div class="pill" id="blPill" title="Blender se usa para optimizar modelos y renderizar"><span class="dot" id="blDot"></span><span id="blTxt">Blender…</span></div>
   <div class="pill" id="keyPill"><span class="dot" id="keyDot"></span><span id="keyTxt">Sin API key</span></div>
+  <button class="btn ghost jobsbtn" id="jobsBtn" title="Trabajos en curso">⚡ Trabajos <span id="jobsCount"></span></button>
   <button class="btn ghost" id="openLib" title="Abrir la carpeta de la biblioteca">📁 Carpeta</button>
   <button class="btn" id="openSettings">⚙ Ajustes</button>
 </header>
@@ -162,6 +176,8 @@ details.sec summary::-webkit-details-marker{display:none}
   <!-- Generador -->
   <aside class="panel">
     <h3>Nuevo asset</h3>
+    <label for="preset">Receta de estudio (opcional)</label>
+    <select id="preset"><option value="">— Escribir desde cero —</option></select>
     <label for="prompt">Describe lo que necesitas (en español vale)</label>
     <textarea id="prompt" placeholder="Ej.: caballero orco con hacha a dos manos y armadura de cuero oxidada"></textarea>
     <label for="category">Tipo de asset</label>
@@ -182,6 +198,7 @@ details.sec summary::-webkit-details-marker{display:none}
       <div id="m3dWrap"><label for="gen3dModel">Modelo 3D</label><select id="gen3dModel"></select></div>
     </div>
     <label class="chk"><input type="checkbox" id="enhance" checked> Optimizar prompt con LLM</label>
+    <label class="chk"><input type="checkbox" id="autoClean" checked> Limpieza automática (quitar fondo y recortar sprites)</label>
     <label class="chk" id="useRefWrap" style="display:none"><input type="checkbox" id="useRef"> Copiar el estilo de la imagen de referencia del proyecto</label>
     <button class="btn" id="btnPlan" style="margin-top:10px;width:100%">Ver / editar prompt optimizado</button>
     <div class="plan" id="plan">
@@ -252,6 +269,7 @@ details.sec summary::-webkit-details-marker{display:none}
       <span class="nm" id="aName">Sin asset seleccionado</span>
       <div class="chips" id="aChips"></div>
       <div class="spacer"></div>
+      <button class="btn sm ghost fav" id="favBtn" title="Favorito: sus prompts guiarán las próximas generaciones del proyecto" style="display:none">☆ Favorito</button>
       <div class="files" id="aFiles"></div>
     </div>
     <div class="stage checker" id="stage">
@@ -289,7 +307,7 @@ details.sec summary::-webkit-details-marker{display:none}
   <aside class="panel right">
     <div class="libh">
       <h3 style="margin:0">Biblioteca</h3>
-      <div class="row"><input type="text" id="q" placeholder="Buscar nombre o tag…"><div class="seg" id="kindSeg"><button data-k="" class="on">Todo</button><button data-k="2d">2D</button><button data-k="3d">3D</button></div></div>
+      <div class="row"><input type="text" id="q" placeholder="Buscar nombre o tag…"><div class="seg" id="kindSeg"><button data-k="" class="on">Todo</button><button data-k="2d">2D</button><button data-k="3d">3D</button><button data-k="fav" title="Favoritos">★</button></div></div>
     </div>
     <div class="grid" id="grid"></div>
     <div class="libf exp"><select id="expEng"><option value="godot">Godot 4</option><option value="unity">Unity</option><option value="generic">ZIP genérico</option></select><button class="btn sm pri" id="btnExport" title="Exporta los assets marcados con Ctrl+clic (o los 40 más recientes)">⬇ Exportar a motor</button></div>
@@ -358,6 +376,7 @@ details.sec summary::-webkit-details-marker{display:none}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="jobsdock" id="jobsDock"><div class="jh"><b>Trabajos</b><span class="hint">Clic: ver su registro · ✕: cancelar</span><button class="btn sm ghost" onclick="this.closest('.jobsdock').classList.remove('show')">Cerrar</button></div><div id="jobsList"></div></div>
 
 <script type="module">
 const $ = (s) => document.querySelector(s);
@@ -391,6 +410,7 @@ async function loadConfig() {
       $('#category').append(og);
     }
     for (const [id, l] of Object.entries(CFG.styles)) { $('#style').append(new Option(l, id)); $('#packStyle').append(new Option(l, id)); }
+    fillPresets();
     for (const [k, l] of Object.entries(CFG.anims)) $('#animSel').append(new Option(l, k));
     $('#category').value = LS.get('category', '2d-character');
     $('#style').value = LS.get('style', 'auto');
@@ -502,24 +522,101 @@ function renderLog(lines) {
   el.innerHTML = lines.map((l) => `<div class="${/✖/.test(l) ? 'e' : /⚠/.test(l) ? 'w' : /✔/.test(l) ? 'k' : ''}">${l.replace(/</g, '&lt;')}</div>`).join('');
   el.scrollTop = el.scrollHeight;
 }
-async function runJob(body, label) {
-  $('#btnGen').disabled = $('#btnGame').disabled = true; busy(true, label);
-  try {
-    const { jobId } = await post('/api/generate', { project: $('#project').value.trim(), ...body });
+// ───────── Cola de trabajos (no bloquea la interfaz: puedes lanzar varios a la vez) ─────────
+const JOBS = new Map(); let LOGJOB = null;
+function renderJobs() {
+  const list = [...JOBS.values()].sort((a, b) => b.created - a.created).slice(0, 12);
+  const running = list.filter((j) => j.status === 'running').length;
+  $('#jobsCount').textContent = running ? running : list.length ? '✓' : '';
+  $('#jobsBtn').classList.toggle('on', running > 0);
+  $('#jobsList').innerHTML = list.length ? list.map((j) => {
+    const pct = j.status === 'done' ? 100 : j.progress != null ? Math.round(j.progress * 100) : null;
+    const st = { running: 'En curso', done: 'Listo', error: 'Error', cancelled: 'Cancelado' }[j.status];
+    return `<div class="job ${j.status}${LOGJOB === j.id ? ' sel' : ''}" data-id="${j.id}">
+      <div class="jt"><b>${(j.label || j.kind).replace(/</g, '&lt;')}</b><span class="js">${st}${j.assets ? ` · ${j.assets}` : ''}</span>${j.status === 'running' ? `<button class="btn sm ghost jc" data-c="${j.id}" title="Cancelar">✕</button>` : ''}</div>
+      <div class="bar ${pct == null && j.status === 'running' ? 'ind' : ''}"><i style="width:${pct == null ? 100 : Math.max(4, pct)}%"></i></div>
+      <div class="jl">${(j.last || '').replace(/^\S+\s+/, '').replace(/</g, '&lt;')}</div></div>`;
+  }).join('') : '<div class="hint" style="padding:10px">Sin trabajos todavía.</div>';
+}
+$('#jobsBtn').onclick = () => $('#jobsDock').classList.toggle('show');
+$('#jobsList').onclick = async (e) => {
+  const c = e.target.closest('[data-c]');
+  if (c) { e.stopPropagation(); await post(`/api/jobs/${c.dataset.c}/cancel`); toast('Cancelando…'); return; }
+  const it = e.target.closest('.job'); if (!it) return;
+  LOGJOB = it.dataset.id; const j = await api('/api/jobs/' + LOGJOB); renderLog(j.log); renderJobs();
+  if (j.assets.length) openAsset(j.assets[0].id);
+};
+function runJob(body, label) {
+  return (async () => {
+    let jobId;
+    try { ({ jobId } = await post('/api/generate', { project: $('#project').value.trim(), label: label.replace(/…$/, ''), ...body })); }
+    catch (e) { toast(e.message, 1); return null; }
+    const startCur = CUR && CUR.id; const rec = { id: jobId, label: (body.prompt || label).slice(0, 80), kind: body.action || body.category, status: 'running', created: Date.now(), progress: null, last: label, assets: 0 };
+    JOBS.set(jobId, rec); LOGJOB = jobId; renderJobs(); $('#jobsDock').classList.add('show');
+    toast('En cola: puedes seguir trabajando mientras tanto');
+    return watchJob(jobId, rec, startCur);
+  })();
+}
+async function watchJob(jobId, rec, startCur) {
+  {
     let j;
     for (;;) {
-      await new Promise((r) => setTimeout(r, 1200));
-      j = await api('/api/jobs/' + jobId);
-      renderLog(j.log);
-      if (j.log.length) $('#busyTxt').textContent = j.log[j.log.length - 1].replace(/^\S+\s+/, '');
+      await new Promise((r) => setTimeout(r, 1300));
+      try { j = await api('/api/jobs/' + jobId); } catch { continue; }
+      Object.assign(rec, { status: j.status, progress: j.progress, last: j.log[j.log.length - 1] || rec.last, assets: j.assets.length });
+      if (LOGJOB === jobId) renderLog(j.log);
+      renderJobs();
       if (j.status !== 'running') break;
     }
     await loadLibrary();
+    if (j.status !== 'cancelled' && $('#autoClean').checked) await autoCleanAll(j.assets);
+    const untouched = (CUR && CUR.id) === startCur;
     if (j.game) { await loadGames(j.game.id); window.open(j.game.url, '_blank'); }
-    else if (j.assets.length) await openAsset(j.assets[0].id);
-    if (j.status === 'error') toast(j.error, 1); else toast(j.game ? 'Juego listo: se abre en otra pestaña' : `${j.assets.length} asset(s) listo(s)`);
-  } catch (e) { toast(e.message, 1); }
-  busy(false); $('#btnGen').disabled = $('#btnGame').disabled = false;
+    else if (j.assets.length && untouched) await openAsset(j.assets[0].id);
+    if (j.status === 'error') toast(j.error, 1);
+    else if (j.status === 'cancelled') toast('Trabajo cancelado');
+    else toast(j.game ? 'Juego listo: se abre en otra pestaña' : `✓ ${j.assets.length} asset(s) listo(s)${untouched ? '' : ' · están en la biblioteca'}`);
+    return j;
+  }
+}
+async function resumeJobs() { // al recargar la página se recuperan los trabajos que siguen en marcha
+  try {
+    const list = await api('/api/jobs');
+    for (const j of list) { if (JOBS.has(j.id)) continue; JOBS.set(j.id, { ...j }); if (j.status === 'running') watchJob(j.id, JOBS.get(j.id), CUR && CUR.id); }
+    renderJobs();
+  } catch {}
+}
+// ───────── Limpieza automática: fondo fuera + recorte, como lo entregaría un artista ─────────
+const CLEAN_CATS = ['2d-character', '2d-item', '2d-icon', '2d-ui', '2d-vfx'];
+async function autoClean(a) {
+  if (a.kind !== '2d' || !CLEAN_CATS.includes(a.category) || a.files.some((f) => /^processed/.test(f))) return a;
+  const img = await loadImg(a.url + 'source.png?t=' + Date.now());
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+  if (a.category === '2d-vfx') { // fondo negro → alfa por luminancia (listo para mezcla normal o aditiva)
+    const id = x.getImageData(0, 0, c.width, c.height), d = id.data;
+    for (let i = 0; i < d.length; i += 4) { const m = Math.max(d[i], d[i + 1], d[i + 2]); const al = m < 14 ? 0 : m / 255; d[i + 3] = Math.round(al * 255); if (al > 0) for (let k = 0; k < 3; k++) d[i + k] = Math.min(255, d[i + k] / al); }
+    x.putImageData(id, 0, 0);
+  } else removeBg(38, c);
+  const bx = alphaBox(c); if (!bx || bx.w * bx.h > c.width * c.height * 0.985) return a; // nada que recortar: se deja tal cual
+  const pad = Math.round(Math.max(bx.w, bx.h) * 0.04);
+  const o = document.createElement('canvas'); o.width = bx.w + pad * 2; o.height = bx.h + pad * 2; o.getContext('2d').drawImage(c, -bx.x0 + pad, -bx.y0 + pad);
+  let r = await post(`/api/assets/${a.id}/file`, { name: `processed_01_${o.width}x${o.height}.png`, data: o.toDataURL('image/png') });
+  if ((CFG.pixelStyles || []).includes(a.style) && a.category !== '2d-vfx') {
+    // pixel art de verdad: rejilla nativa (no "falso pixel art" de 1024 px), paleta cerrada y alfa binario
+    const H = { '2d-character': 72, '2d-item': 40, '2d-icon': 32, '2d-ui': 64 }[a.category] || 48;
+    const tw = Math.max(8, Math.round(o.width * H / o.height));
+    const px = pixelateCanvas(o, tw, a.category === '2d-icon' ? 16 : 24);
+    r = await post(`/api/assets/${a.id}/file`, { name: `processed_02_pixel_${px.width}x${px.height}.png`, data: px.toDataURL('image/png') });
+  }
+  return r;
+}
+async function autoCleanAll(list) {
+  const todo = (list || []).filter((a) => a.kind === '2d' && CLEAN_CATS.includes(a.category));
+  if (!todo.length) return;
+  let n = 0;
+  for (const a of todo) { try { await autoClean(a); n++; } catch (e) { console.warn('autoClean', a.name, e); } }
+  await loadLibrary(); if (n) toast(`Limpieza automática: ${n} sprite(s) sin fondo y recortados`);
 }
 $('#btnGen').onclick = () => {
   const prompt = $('#prompt').value.trim(); if (!prompt) return toast('Describe el asset que quieres', 1);
@@ -534,13 +631,13 @@ $('#prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ct
 async function loadLibrary() { ASSETS = await api('/api/assets'); renderGrid(); }
 function renderGrid() {
   const q = $('#q').value.trim().toLowerCase();
-  const list = ASSETS.filter((a) => (!KIND || a.kind === KIND) && (!q || [a.name, a.prompt, a.project, ...(a.tags || [])].join(' ').toLowerCase().includes(q)));
+  const list = ASSETS.filter((a) => (!KIND || (KIND === 'fav' ? a.favorite : a.kind === KIND)) && (!q || [a.name, a.prompt, a.project, ...(a.tags || [])].join(' ').toLowerCase().includes(q)));
   const g = $('#grid'); g.innerHTML = '';
   if (!list.length) { g.innerHTML = `<div class="libempty">${ASSETS.length ? 'Nada coincide con el filtro.' : 'Aún no hay assets.'}</div>`; return; }
   for (const a of list) {
     const thumb = a.files.includes('thumb.png') ? 'thumb.png' : a.category === '2d-anim' ? (a.files.find((f) => /_sheet_/.test(f)) || 'frame_01.png') : a.kind === '2d' ? (a.files.filter((f) => /^processed.*\.png$/.test(f)).pop() || 'source.png') : a.files.includes('concept.png') ? 'concept.png' : null;
     const c = document.createElement('div'); c.className = 'card' + (CUR && CUR.id === a.id ? ' sel' : '') + (PICK.has(a.id) ? ' pick' : '');
-    c.innerHTML = `${PICK.has(a.id) ? '<span class="pk">JUEGO</span>' : ''}<span class="k">${a.category === '2d-anim' ? 'ANIM' : a.kind.toUpperCase()}</span><div class="th checker">${thumb ? `<img loading="lazy" src="${a.url}${thumb}?v=${a.files.length}">` : '<span class="ph">GLB</span>'}</div><div class="cap" title="${a.prompt || ''}">${a.name}</div>`;
+    c.innerHTML = `${a.favorite ? '<span class="st">★</span>' : ''}${PICK.has(a.id) ? '<span class="pk">JUEGO</span>' : ''}<span class="k">${a.category === '2d-anim' ? 'ANIM' : a.kind.toUpperCase()}</span><div class="th checker">${thumb ? `<img loading="lazy" src="${a.url}${thumb}?v=${a.files.length}">` : '<span class="ph">GLB</span>'}</div><div class="cap" title="${a.prompt || ''}">${a.name}</div>`;
     c.onclick = (e) => { if (e.ctrlKey || e.metaKey || e.shiftKey) { PICK.has(a.id) ? PICK.delete(a.id) : PICK.add(a.id); updatePickHint(); renderGrid(); } else openAsset(a.id); };
     g.append(c);
   }
@@ -557,6 +654,8 @@ $('#delBtn').onclick = async () => {
 // ───────── Cabecera del asset ─────────
 function setHeader() {
   $('#delBtn').disabled = !CUR;
+  $('#favBtn').style.display = CUR ? '' : 'none';
+  if (CUR) { $('#favBtn').classList.toggle('on', !!CUR.favorite); $('#favBtn').textContent = CUR.favorite ? '★ Favorito' : '☆ Favorito'; }
   if (!CUR) { $('#aName').textContent = 'Sin asset seleccionado'; $('#aChips').innerHTML = ''; $('#aFiles').innerHTML = ''; return; }
   $('#aName').textContent = CUR.name;
   const ch = [[CUR.kind.toUpperCase(), 1], [CUR.category === 'world' ? `Mundo · ${CUR.worldName || ''}` : CUR.category === '2d-anim' ? `Animación ${CUR.anim} · ${CUR.frames} fot.` : (CFG.types[CUR.category]?.label || CUR.category)], [CUR.model], CUR.width ? [`${CUR.width}×${CUR.height}`] : null, CUR.trellisMode ? [`trellis:${CUR.trellisMode}`] : null, [`seed ${CUR.seed}`], ...(CUR.tags || []).slice(0, 3).map((t) => ['#' + t])].filter(Boolean);
@@ -676,17 +775,18 @@ function kmeans(px, k) {
   }
   return C.map((c) => c.map(Math.round));
 }
-function pixelate(tw, colors) {
-  tw = Math.max(8, Math.min(512, tw | 0)); const th = Math.max(1, Math.round(cv.height * tw / cv.width));
+function pixelate(tw, colors) { setFrom(pixelateCanvas(cv, tw, colors)); }
+function pixelateCanvas(base, tw, colors) {
+  tw = Math.max(8, Math.min(512, tw | 0)); const th = Math.max(1, Math.round(base.height * tw / base.width));
   // reducción por pasos para promediar bien
-  let src = cv;
+  let src = base;
   while (src.width / 2 > tw) { const c = document.createElement('canvas'); c.width = Math.round(src.width / 2); c.height = Math.round(src.height / 2); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); src = c; }
   const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th);
   const id = x.getImageData(0, 0, tw, th), d = id.data, px = [];
   for (let i = 0; i < d.length; i += 4) { d[i + 3] = d[i + 3] < 128 ? 0 : 255; if (d[i + 3]) px.push(d[i], d[i + 1], d[i + 2]); }
   const pal = kmeans(px, colors);
   for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; let m = Infinity, b = pal[0]; for (const p of pal) { const dr = d[i] - p[0], dg = d[i + 1] - p[1], db = d[i + 2] - p[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; b = p; } } d[i] = b[0]; d[i + 1] = b[1]; d[i + 2] = b[2]; }
-  x.putImageData(id, 0, 0); setFrom(c);
+  x.putImageData(id, 0, 0); return c;
 }
 function makeSeamless() {
   const w = cv.width, h = cv.height;
@@ -733,6 +833,24 @@ $('#tSave').onclick = async () => {
 $('#tEdit').onclick = () => {
   const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
   runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
+};
+// ───────── Favoritos: lo que marcas con ★ enseña al director de arte ─────────
+$('#favBtn').onclick = async () => {
+  if (!CUR) return;
+  CUR = await api('/api/assets/' + CUR.id, { method: 'PATCH', body: JSON.stringify({ favorite: !CUR.favorite }) });
+  setHeader(); await loadLibrary();
+  toast(CUR.favorite ? '★ Guardado: las próximas generaciones del proyecto imitarán su estilo' : 'Quitado de favoritos');
+};
+// ───────── Recetas de estudio ─────────
+function fillPresets() {
+  const el = $('#preset'); const groups = {};
+  (CFG.presets || []).forEach((p, i) => { (groups[p.g] = groups[p.g] || []).push([p, i]); });
+  for (const [g, items] of Object.entries(groups)) { const og = document.createElement('optgroup'); og.label = g; for (const [p, i] of items) og.append(new Option(p.n, i)); el.append(og); }
+}
+$('#preset').onchange = () => {
+  const p = (CFG.presets || [])[$('#preset').value]; if (!p) return;
+  $('#prompt').value = p.p; $('#category').value = p.c; $('#style').value = p.s; onCategory(); clearPlan();
+  toast('Receta cargada: ajusta el texto si quieres y pulsa Generar');
 };
 // ───────── Pack coherente ─────────
 $('#btnPack').onclick = () => {
@@ -798,7 +916,7 @@ function buildAutotile(imgA, imgB, T, mode) {
   ox.putImageData(id, 0, 0); return out;
 }
 function autotilePreview(sheet, T, cols = 14, rows = 9) {
-  const V = []; for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) { const d = Math.hypot(i - cols / 2, (j - rows / 2) * 1.4); V.push(d < 3.2 + Math.sin(i * 1.7 + j) * 1.2 || (i * 7 + j * 13) % 23 === 0 ? 1 : 0); }
+  const V = []; for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) { const d = Math.hypot(i - cols / 2, (j - rows / 2) * 1.4); const d2 = Math.hypot(i - cols * 0.18, (j - rows * 0.2) * 1.3); V.push(d < 3.2 + Math.sin(i * 1.7 + j) * 0.9 || d2 < 1.6 ? 1 : 0); }
   const P = document.createElement('canvas'); P.width = cols * T; P.height = rows * T; const px = P.getContext('2d'); px.imageSmoothingEnabled = false;
   const at = (i, j) => V[j * (cols + 1) + i];
   for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const idx = at(i, j) | at(i + 1, j) << 1 | at(i + 1, j + 1) << 2 | at(i, j + 1) << 3; px.drawImage(sheet, (idx % 4) * T, Math.floor(idx / 4) * T, T, T, i * T, j * T, T, T); }
@@ -1029,7 +1147,7 @@ $('#rSheet').onclick = async () => {
 showView('empty');
 await loadConfig().catch((e) => toast('No conecta con el servidor local: ' + e.message, 1));
 await loadLibrary().catch(() => {});
-loadProject(); loadGames(); checkBlender(); loadWorldTemplates();
+loadProject(); loadGames(); checkBlender(); loadWorldTemplates(); resumeJobs();
 </script>
 </body>
 </html>
