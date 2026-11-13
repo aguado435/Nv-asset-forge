@@ -10,7 +10,7 @@ persona o el LLM diseñador de niveles de la app.
 Uso:
   blender -b -P worldgen.py -- --spec worlds/aethermoor.json [--shot world|lm0|lm1...]
          [--res 1600x900] [--samples 40] [--out render.png] [--save-blend mundo.blend]
-         [--export-glb mundo.glb]
+         [--export-glb mundo.glb] [--time day|dawn|dusk|night] [--shot play0|play1…] [--vignette 0.55]
 """
 import json
 import math
@@ -38,6 +38,8 @@ for i, a in enumerate(argv):
     if a == "--save-blend": G["blend"] = argv[i + 1]
     if a == "--export-glb": G["glb"] = argv[i + 1]
     if a == "--no-render": G["render"] = False
+    if a == "--time": G["time"] = argv[i + 1]
+    if a == "--vignette": G["vignette"] = float(argv[i + 1])
 
 with open(G["spec"], "r", encoding="utf-8") as fh:
     SPEC = json.load(fh)
@@ -394,6 +396,9 @@ def shots():
     out = {"world": (((lx0 + lx1) / 2, (ly0 + ly1) / 2 - (ly1 - ly0) * 0.04, 10), 52, -18, w, 5.6)}
     for k, lm in enumerate(SPEC.get("landmarks", [])):
         out[f"lm{k}"] = ((lm["x"], lm["y"], BW.ground(lm["x"], lm["y"]) + 8), 32, -18, 150 * lm.get("scale", 1.0), 2.8)
+        # cámara de juego: perspectiva elevada y cercana, como la vista del jugador en un RPG 2D-HD
+        sc_ = lm.get("scale", 1.0) or 1.0
+        out[f"play{k}"] = ((lm["x"], lm["y"], BW.ground(lm["x"], lm["y"]) + 3), 46, -10, max(90.0, 100 * sc_), 2.2)
     for name, sh in (SPEC.get("shots") or {}).items():
         out[name] = (tuple(sh.get("target", [0, 0, 10])), sh.get("elev", 35), sh.get("az", -20), sh.get("width", 200), sh.get("fstop", 4.0))
     return out
@@ -443,10 +448,13 @@ def main():
         so.data.energy = sun.get("energy", 4.5)
         if sun.get("color"):
             so.data.color = sun["color"]
+    t = G.get("time") or SPEC.get("time")
+    expo_extra = F.apply_time(t, so) or 0.0 if t else 0.0
     F.CFG["res"], F.CFG["samples"], F.CFG["out"] = G["res"], G["samples"], G["out"]
     F.render_settings()
+    F.add_vignette(G.get("vignette", 0.5))
     vs = bpy.context.scene.view_settings
-    vs.exposure = SPEC.get("exposure", -0.85)
+    vs.exposure = SPEC.get("exposure", -0.85) + expo_extra
     for lk in ("AgX - Punchy", "Punchy"):
         try:
             vs.look = lk

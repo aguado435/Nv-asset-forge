@@ -783,6 +783,88 @@ def render_settings():
     tree.links.new(rl.outputs["Image"], gl.inputs["Image"]); tree.links.new(gl.outputs[0], oin)
 
 
+def add_vignette(strength=0.6, size=(0.95, 0.82), blur=260):
+    """Inserta una viñeta suave antes de la salida del compositor (Blender 4 y 5)."""
+    sc = bpy.context.scene
+    tree = getattr(sc, "compositing_node_group", None) or (sc.node_tree if getattr(sc, "use_nodes", False) else None)
+    if tree is None:
+        return
+    out = next((n for n in tree.nodes if n.bl_idname in ("NodeGroupOutput", "CompositorNodeComposite")), None)
+    if out is None or not out.inputs[0].links:
+        return
+    src = out.inputs[0].links[0].from_socket
+    el = tree.nodes.new("CompositorNodeEllipseMask")
+    if "Size" in el.inputs:
+        el.inputs["Size"].default_value = size
+    else:
+        el.width, el.height = size
+    bl = tree.nodes.new("CompositorNodeBlur")
+    if "Size" in bl.inputs:
+        try: bl.inputs["Size"].default_value = (blur, blur)
+        except Exception: pass
+    else:
+        bl.size_x = bl.size_y = blur
+    tree.links.new(el.outputs[0], bl.inputs[0])
+    mx = tree.nodes.new("ShaderNodeMix") if "ShaderNodeMix" in dir(bpy.types) else None
+    try:
+        mx.data_type = "RGBA"; mx.blend_type = "MULTIPLY"; mx.inputs[0].default_value = strength
+        tree.links.new(src, mx.inputs[6]); tree.links.new(bl.outputs[0], mx.inputs[7]); tree.links.new(mx.outputs[2], out.inputs[0])
+    except Exception:
+        tree.nodes.remove(mx) if mx else None
+        mx = tree.nodes.new("CompositorNodeMixRGB"); mx.blend_type = "MULTIPLY"; mx.inputs[0].default_value = strength
+        tree.links.new(src, mx.inputs[1]); tree.links.new(bl.outputs[0], mx.inputs[2]); tree.links.new(mx.outputs[0], out.inputs[0])
+
+
+TIMES = {  # elevación y acimut del sol, energía, color, fuerza del cielo, multiplicador de luces cálidas, exposición extra
+    "day": (34, -40, 4.5, (1.0, 0.86, 0.68), 1.0, 1.0, 0.0, 1.0),
+    "dawn": (14, 60, 3.4, (1.0, 0.66, 0.5), 0.6, 1.6, 0.1, 0.55),
+    "dusk": (12, -70, 3.6, (1.0, 0.45, 0.18), 0.5, 2.0, 0.05, 0.3),
+    "night": (40, 30, 0.12, (0.5, 0.62, 1.0), 0.1, 3.0, -0.15, 0.08),
+}
+
+
+def apply_time(t, sun_obj=None):
+    """Hora del día coherente: sol, cielo, faroles y ventanas."""
+    if t not in TIMES:
+        return
+    el, az, en, col, skym, lmul, expo, fillm = TIMES[t]
+    sc = bpy.context.scene
+    so = sun_obj or bpy.data.objects.get("Sun")
+    if so:
+        so.rotation_euler = (math.radians(90 - el), 0, math.radians(az)); so.data.energy = en; so.data.color = col
+    w = sc.world
+    if w and w.use_nodes:
+        for n in w.node_tree.nodes:
+            if n.type == "TEX_SKY":
+                try: n.sun_elevation = math.radians(max(el, 2) if t != "night" else -4)
+                except Exception: pass
+                try: n.sun_rotation = math.radians(az + 180)
+                except Exception: pass
+            if n.type == "BACKGROUND":
+                n.inputs[1].default_value *= skym
+                if t == "night" and not n.inputs[0].links:
+                    n.inputs[0].default_value = (0.02, 0.03, 0.08, 1)
+        if t == "night":
+            bg = next((n for n in w.node_tree.nodes if n.type == "BACKGROUND"), None)
+            if bg and bg.inputs[0].links:  # cielo nocturno azul en vez del Nishita negro
+                w.node_tree.links.remove(bg.inputs[0].links[0]); bg.inputs[0].default_value = (0.03, 0.05, 0.13, 1); bg.inputs[1].default_value = 1.0
+    for o in sc.objects:
+        if o.type == "LIGHT" and o.data.type == "POINT":
+            o.data.energy *= lmul
+        elif o.type == "LIGHT" and o.data.type == "SUN" and o != so:  # relleno y contraluz siguen la hora
+            o.data.energy *= fillm
+            if t == "night":
+                o.data.color = (0.35, 0.45, 1.0)
+    if t in ("night", "dusk"):
+        for m in bpy.data.materials:
+            if not m.use_nodes:
+                continue
+            for n in m.node_tree.nodes:
+                if n.type == "BSDF_PRINCIPLED" and "Emission Strength" in n.inputs and n.inputs["Emission Strength"].default_value > 0.5:
+                    n.inputs["Emission Strength"].default_value *= 2.0 if t == "night" else 1.4
+    return expo
+
+
 def materials():
     return {
         "wall": detail_mat("Wall", "wall", "box", repeat=0.16, grime=2.5),

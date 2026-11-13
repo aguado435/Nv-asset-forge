@@ -1,2 +1,5 @@
 config.json
 library/
+__pycache__/
+*.pyc
+examples/last_acre/acre_v1_backup.py

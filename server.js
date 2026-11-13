@@ -97,7 +97,7 @@ const NV = {
 // Modelos de imagen. Cada usuario elige el que quiera, y puede añadir cualquier otro
 // de build.nvidia.com escribiendo su ruta (Ajustes → modelo personalizado).
 const IMAGE_MODELS = {
-  'flux.2-klein-4b': { label: 'FLUX.2 klein · rápido y nítido (recomendado)', path: 'black-forest-labs/flux.2-klein-4b', steps: { draft: 4, normal: 4, high: 4 }, cfg: null },
+  'flux.2-klein-4b': { label: 'FLUX.2 klein · rápido y nítido (recomendado)', path: 'black-forest-labs/flux.2-klein-4b', steps: { draft: 4, normal: 4, high: 4 }, cfg: null, maxPrompt: 800 },
   'flux.1-dev': { label: 'FLUX.1 dev · más pasos (a veces saturado)', path: 'black-forest-labs/flux.1-dev', mode: 'base', steps: { draft: 20, normal: 30, high: 50 }, cfg: 3.5 },
   'flux.1-schnell': { label: 'FLUX.1 schnell', path: 'black-forest-labs/flux.1-schnell', mode: 'base', steps: { draft: 4, normal: 4, high: 4 }, cfg: null },
 };
@@ -132,9 +132,10 @@ async function nvRequest(url, payload, { apiKey, headers = {}, local = false } =
   }
   let res;
   try {
-    res = await fetch(url, { method: 'POST', headers: h, body: JSON.stringify(payload) });
+    res = await fetch(url, { method: 'POST', headers: h, body: JSON.stringify(payload), signal: AbortSignal.timeout(local ? 900e3 : 200e3) });
   } catch (e) {
-    throw new Error(local ? `No se pudo conectar con el NIM local en ${url}. ¿Está el contenedor arrancado?` : `Sin conexión con NVIDIA (${e.cause?.code || e.message})`);
+    const err = new Error(local ? `No se pudo conectar con el NIM local en ${url}. ¿Está el contenedor arrancado?` : `Sin conexión con NVIDIA (${e.name === 'TimeoutError' ? 'sin respuesta en 200 s' : e.cause?.code || e.message})`);
+    err.network = true; throw err;
   }
   const started = Date.now();
   while (res.status === 202) { // cola asíncrona de NVCF
@@ -194,15 +195,39 @@ async function imageInput(buf, local, apiKey) {
   return { value: `data:${mimeOf(buf)};asset_id,${id}`, headers: { 'NVCF-INPUT-ASSET-REFERENCES': id, 'NVCF-FUNCTION-ASSET-IDS': id } };
 }
 
-async function genImage(cfg, { prompt, width, height, quality, seed, model }) {
+function fitPrompt(p, max) { // recorta por frases sin cortar palabras a la mitad
+  if (p.length <= max) return p;
+  const parts = p.split(/(?<=[.,;])\s+/); let out = '';
+  for (const x of parts) { if ((out + ' ' + x).trim().length > max) break; out = (out + ' ' + x).trim(); }
+  return out || p.slice(0, max);
+}
+// El filtro de NVIDIA da falsos positivos con palabras inocentes (p. ej. "sage green"): se limpian y se reintenta solo
+const FILTER_SWAPS = [[/\bsage[ -]?green\b/gi, 'soft olive green'], [/\bsage\b/gi, 'herb'], [/\(#?[0-9a-f]{6}\)/gi, ''], [/#[0-9a-f]{6}\b/gi, ''],
+  [/\b(blood|bloody|gore|gory|corpse|naked|nude|kill(ing)?|skin)\b/gi, ''], [/\s{2,}/g, ' ']];
+function filterSafe(p) { let o = p; for (const [re, to] of FILTER_SWAPS) o = o.replace(re, to); return o.replace(/\s+([,.])/g, '$1').trim(); }
+async function genImage(cfg, opts) {
+  try { return await genImageRaw(cfg, opts); } catch (e) {
+    if (!/filtro de contenido/.test(e.message)) throw e;
+    const safe = filterSafe(opts.prompt);
+    try { return await genImageRaw(cfg, { ...opts, prompt: safe, seed: (opts.seed || 1) + 7 }); } catch (e2) {
+      if (!/filtro de contenido/.test(e2.message)) throw e2;
+      // último recurso: tema + encuadre (primera y última frase), sin la biblia de estilo
+      const parts = safe.split(/(?<=\.)\s+/);
+      return genImageRaw(cfg, { ...opts, prompt: [parts[0], parts.length > 2 ? parts[1] : '', parts[parts.length - 1]].join(' '), seed: (opts.seed || 1) + 13 });
+    }
+  }
+}
+async function genImageRaw(cfg, { prompt, width, height, quality, seed, model }) {
   const local = cfg.backend2d === 'local';
   const m = imageModel(cfg, model);
   const payload = { prompt, width, height, seed, steps: m.steps[quality] || m.steps.normal };
   if (m.mode) payload.mode = m.mode;
   if (m.cfg != null) payload.cfg_scale = m.cfg;
   const url = local ? trimUrl(cfg.local2dUrl) + '/v1/infer' : NV.genai + m.path;
+  if (!local && m.maxPrompt && prompt.length > m.maxPrompt) payload.prompt = fitPrompt(prompt, m.maxPrompt);
   try {
-    return firstArtifact(await nvRequest(url, payload, { apiKey: cfg.apiKey, local }));
+    try { return firstArtifact(await nvRequest(url, payload, { apiKey: cfg.apiKey, local })); }
+    catch (e) { if (!e.network || local) throw e; return firstArtifact(await nvRequest(url, payload, { apiKey: cfg.apiKey, local })); } // un reintento si la cola se cuelga
   } catch (e) {
     if (e.status !== 422 && e.status !== 400) {
       if (e.status === 404) e.message += ` · ¿Existe el modelo “${m.path}” en build.nvidia.com?`;
@@ -256,13 +281,13 @@ async function chatOnce(cfg, messages, max_tokens, nvModel) {
 }
 const llmLabel = (cfg) => (cfg.llmProvider === 'local' ? `LLM local (${cfg.llmLocalModel || 'auto'})` : cfg.llmModel);
 
-async function llmJSON(cfg, system, user) {
-  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], 2000);
+async function llmJSON(cfg, system, user, max_tokens = 2000) {
+  const j = await chatOnce(cfg, [{ role: 'system', content: system }, { role: 'user', content: user }], max_tokens);
   let txt = j.choices?.[0]?.message?.content || '';
   txt = txt.replace(/<think>[\s\S]*?<\/think>/g, '');
   const s = txt.indexOf('{'), e = txt.lastIndexOf('}');
   if (s < 0 || e < s) throw new Error('el LLM no devolvió JSON');
-  return JSON.parse(txt.slice(s, e + 1));
+  try { return JSON.parse(txt.slice(s, e + 1)); } catch { return JSON.parse(tolerantJSON(txt.slice(s, e + 1))); }
 }
 
 // ───────────────────────── Dirección de arte ─────────────────────────
@@ -339,6 +364,119 @@ async function enhancePrompt(cfg, prompt, category, style, bible = '') {
     tags: Array.isArray(j.tags) ? j.tags.slice(0, 6).map(String) : [],
     source: llmLabel(cfg),
   };
+}
+
+// ───────────────────────── Packs coherentes ─────────────────────────
+const PACK_CATS = ['2d-character', '2d-item', '2d-icon', '2d-texture', '2d-environment', '2d-vfx', '2d-ui'];
+const PACK_SYS = `You are the art director of a top-tier indie game studio. From one request you plan a COHERENT ASSET PACK: every asset must look like it comes from the same game.
+Return ONLY JSON, no markdown:
+{"pack_name": short English snake_case name,
+ "style_bible": English, 35-55 words (max 320 characters), the shared visual rules: rendering technique, line/outline treatment, shading model, light direction, palette (name 5-7 colors with plain words, no hex codes), level of detail, texture treatment. This exact text is appended to every asset prompt, so make it precise and reusable,
+ "assets": [{"name": short English snake_case, "category": one of ${PACK_CATS.join(', ')}, "subject": English, 25-50 words, only WHAT the asset is: design, silhouette, signature details, materials (no style words, no background words)}]}
+Rules: cover what a developer needs to start building that game (characters, enemies, props, pickups, icons, ground/wall textures, one background, a VFX), no duplicates, concrete and varied silhouettes, everything fits the same world and color story. No text, letters or logos anywhere.`;
+
+async function runPack(cfg, job, o, log, quality, project) {
+  const prompt = String(o.prompt || '').trim();
+  if (!prompt) throw new Error('Describe el pack (juego, mundo, tema…).');
+  const count = clampInt(o.count, 3, 24, 10);
+  const style = STYLES[o.style] ? o.style : 'auto';
+  const proj = await loadProject(cfg, project);
+  const bible = String(proj.bible || '').trim();
+  const only = Array.isArray(o.categories) ? o.categories.filter((c) => PACK_CATS.includes(c)) : [];
+  log(`Planificando un pack de ${count} assets con ${llmLabel(cfg)}…`);
+  let plan;
+  try {
+    plan = await llmJSON(cfg, PACK_SYS, `Request: ${prompt}\nNumber of assets: exactly ${count}\n${only.length ? `Allowed categories: ${only.join(', ')}\n` : ''}${STYLES[style].p ? `Mandatory art style: ${STYLES[style].p}\n` : ''}${bible ? `Existing project art bible (keep it, refine it): ${bible}\n` : ''}`, 5000);
+  } catch (e) { throw new Error('El LLM no pudo planificar el pack: ' + short(e.message)); }
+  const items = (Array.isArray(plan.assets) ? plan.assets : []).filter((a) => a && a.subject).slice(0, count)
+    .map((a) => ({ name: slugName(a.name || a.subject), category: PACK_CATS.includes(a.category) ? a.category : (only[0] || '2d-item'), subject: String(a.subject).slice(0, 600) }));
+  if (!items.length) throw new Error('El plan del pack llegó vacío.');
+  const styleBible = [STYLES[style].p, String(plan.style_bible || bible || '').slice(0, 900)].filter(Boolean).join(', ');
+  const packName = slugName(plan.pack_name || prompt);
+  const packId = Date.now().toString(36);
+  job.pack = { id: packId, name: packName, styleBible, items };
+  log(`Pack “${packName}”: ${items.map((i) => i.name).join(', ')}`);
+  log(`Biblia de estilo: ${styleBible}`);
+  if (o.saveBible !== false && !bible) { await saveProject(cfg, project, { bible: styleBible }); log('Guardada como guía de estilo del proyecto.'); }
+  const imgKey = o.imageModel || cfg.imageModel;
+  const baseSeed = randSeed();
+  let ok = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i], T = TYPES[it.category];
+    const [w, h] = T.size.split('x').map(Number);
+    // FLUX.2 klein admite 800 caracteres: tema + encuadre + fondo siempre caben; la biblia de estilo ocupa el resto
+    const frame = T.guide.split(',').slice(0, 2).join(',');
+    const bgRule = T.bg === 'white' ? 'isolated on a plain pure white background, no shadow, no text' : T.bg === 'black' ? 'on a plain pure black background, no text' : 'no text, no UI';
+    const head = `${fitPrompt(it.subject, 260)}. ${frame}. `, tail = `. ${bgRule}.`;
+    const image_prompt = head + fitPrompt(styleBible, 790 - head.length - tail.length) + tail;
+    log(`[${i + 1}/${items.length}] ${it.name} (${T.label})…`);
+    try {
+      const img = await genImage(cfg, { prompt: image_prompt, width: w, height: h, quality, seed: baseSeed + i, model: imgKey });
+      const sz = pngSize(img.buf) || {};
+      const a = await createAsset(cfg, { name: it.name, project, kind: '2d', category: it.category, style, prompt: it.subject, imagePrompt: image_prompt,
+        tags: ['pack:' + packName, it.category.replace('2d-', '')], seed: baseSeed + i, quality, background: T.bg, model: imgKey,
+        width: sz.w || w, height: sz.h || h, pack: { id: packId, name: packName, index: i } }, { 'source.png': img.buf });
+      job.assets.push(a); ok++;
+    } catch (e) { log(`⚠ ${it.name}: ${short(e.message)}`); }
+  }
+  log(`✔ Pack listo: ${ok}/${items.length} assets. Búscalo en la biblioteca con “pack:${packName}”.`);
+  job.status = ok ? 'done' : 'error'; if (!ok) job.error = 'No se generó ningún asset del pack.';
+}
+
+// ───────────────────────── Exportar a motor (ZIP sin dependencias) ─────────────────────────
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(buf) { let c = 0xffffffff; for (let i = 0; i < buf.length; i++) c = CRC_T[(c ^ buf[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+function makeZip(entries) { // entries: [{name, data:Buffer}]
+  const zlib = require('zlib');
+  const local = [], central = []; let off = 0;
+  const d = new Date(), dos = (((d.getFullYear() - 1980) << 9 | (d.getMonth() + 1) << 5 | d.getDate()) << 16 | d.getHours() << 11 | d.getMinutes() << 5 | (d.getSeconds() >> 1)) >>> 0;
+  for (const { name, data } of entries) {
+    const nm = Buffer.from(name, 'utf8'), crc = crc32(data);
+    const comp = /\.(png|jpe?g|webp|glb|zip)$/i.test(name) ? null : zlib.deflateRawSync(data, { level: 9 });
+    const method = comp && comp.length < data.length ? 8 : 0, body = method ? comp : data;
+    const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(method, 8);
+    h.writeUInt32LE(dos, 10); h.writeUInt32LE(crc, 14); h.writeUInt32LE(body.length, 18); h.writeUInt32LE(data.length, 22); h.writeUInt16LE(nm.length, 26);
+    local.push(h, nm, body);
+    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(method, 10);
+    c.writeUInt32LE(dos, 12); c.writeUInt32LE(crc, 16); c.writeUInt32LE(body.length, 20); c.writeUInt32LE(data.length, 24); c.writeUInt16LE(nm.length, 28); c.writeUInt32LE(off, 42);
+    central.push(c, nm); off += 30 + nm.length + body.length;
+  }
+  const cd = Buffer.concat(central), e = Buffer.alloc(22);
+  e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(entries.length, 8); e.writeUInt16LE(entries.length, 10); e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);
+  return Buffer.concat([...local, cd, e]);
+}
+const ENGINES = {
+  godot: { root: 'nvforge', label: 'Godot 4' },
+  unity: { root: 'Assets/NVForge', label: 'Unity' },
+  generic: { root: 'nvforge_assets', label: 'Genérico' },
+};
+async function exportPack(cfg, ids, engine) {
+  const E = ENGINES[engine] || ENGINES.generic;
+  const all = await listAssets(cfg);
+  const pick = ids && ids.length ? all.filter((a) => ids.includes(a.id)) : all.slice(0, 40);
+  if (!pick.length) throw new Error('No hay assets que exportar.');
+  const entries = [], manifest = { tool: 'NV Asset Forge', engine: E.label, exported: new Date().toISOString(), assets: [] };
+  const used = new Set();
+  for (const a of pick) {
+    let folder = `${a.kind}/${a.category || a.kind}/${slugName(a.name)}`;
+    for (let k = 2; used.has(folder); k++) folder = `${a.kind}/${a.category || a.kind}/${slugName(a.name)}_${k}`;
+    used.add(folder);
+    const files = a.files.filter((f) => !/^(thumb\.png|render_review.*|.*\.log|.*\.blend1)$/i.test(f) && !(engine !== 'generic' && /\.(py|blend)$/i.test(f)));
+    for (const f of files) {
+      const st = await fsp.stat(path.join(a.dir, f)); if (!st.isFile() || st.size > 200e6) continue;
+      entries.push({ name: `${E.root}/${folder}/${f}`, data: await fsp.readFile(path.join(a.dir, f)) });
+    }
+    manifest.assets.push({ id: a.id, name: a.name, kind: a.kind, category: a.category, path: `${folder}/`, files, main: bestFile(a), tags: a.tags || [], prompt: a.prompt, seed: a.seed, model: a.model, pack: a.pack });
+  }
+  entries.push({ name: `${E.root}/manifest.json`, data: Buffer.from(JSON.stringify(manifest, null, 2)) });
+  const pixel = pick.some((a) => a.style === 'pixel' || (a.tags || []).some((t) => /pixel/.test(t)));
+  const readme = engine === 'godot'
+    ? `# NV Asset Forge → Godot 4\n\nCopia la carpeta \`nvforge/\` dentro de tu proyecto (res://nvforge).\n\n- Los .glb se importan solos como escenas 3D.\n- Los tilesets incluyen un \`.tres\` (TileSet con terreno por esquinas) listo para un TileMapLayer.\n${pixel ? '- Pixel art: Proyecto → Ajustes → Rendering → Textures → Default Texture Filter = **Nearest**.\n' : ''}- \`manifest.json\` lista cada asset con su prompt y semilla para regenerarlo.\n`
+    : engine === 'unity'
+      ? `# NV Asset Forge → Unity\n\nDescomprime en la raíz del proyecto: todo queda en \`Assets/NVForge\`.\n\n- Los .fbx/.glb (glTFast) se importan como modelos.\n- Sprites: Texture Type = Sprite (2D and UI).${pixel ? ' Pixel art: Filter Mode = Point, Compression = None.' : ''}\n- \`manifest.json\` lista prompts y semillas.\n`
+      : '# NV Asset Forge\n\nAssets exportados con su manifest.json (prompt, semilla, modelo).\n';
+  entries.push({ name: `${E.root}/README.md`, data: Buffer.from(readme) });
+  return { zip: makeZip(entries), count: pick.length, name: `nvforge_${engine}_${new Date().toISOString().slice(0, 10)}.zip` };
 }
 
 // ───────────────────────── Biblioteca local ─────────────────────────
@@ -831,6 +969,16 @@ Return ONLY one JSON object (no markdown) with these keys:
 - sun: {elev (5-80 degrees), az, energy (1-6), color:[r,g,b]} and exposure (-2..0) to set the mood (golden hour, dusk, night...)
 Design rules: a coherent, magical and readable world. Biomes must make geographic sense (snow and mountains together, deserts far from lakes, swamps near rivers, ports on the coast, castles on hills, fortresses in gorges or passes). Every landmark must sit on land, connected by roads. Leave breathing room between landmarks (>60 m). Keep 20 % of the land quiet (plains, forest) for contrast. Use the full map.`;
 
+function tolerantJSON(text) {
+  let t = String(text).replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/g, '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b < a) throw new Error('no hay objeto JSON');
+  t = t.slice(a, b + 1);
+  try { return JSON.parse(t); } catch {}
+  const fixed = t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:"'\\])\/\/[^\n]*/g, '$1')
+    .replace(/,\s*([}\]])/g, '$1').replace(/([{,]\s*)([A-Za-z_][\w]*)\s*:/g, '$1"$2":').replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
+  return JSON.parse(fixed);
+}
 function wNum(v, lo, hi, d) { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; }
 function sanitizeWorld(spec) {
   const s = typeof spec === 'object' && spec ? spec : {};
@@ -890,11 +1038,16 @@ function runWorldgen(bin, args, log) {
 async function designWorld(cfg, messages, log) {
   log(`Diseñando el mundo con ${cfg.llmProvider === 'local' ? llmLabel(cfg) : cfg.codeModel}…`);
   const r = await chatStream(cfg, messages, cfg.codeModel, 12000, (n) => log(`… ${n} líneas de receta`));
-  const t = r.text.replace(/```(?:json)?/g, '');
-  const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a < 0 || b < a) throw new Error('El diseñador no devolvió una receta JSON. Prueba otro modelo de código.');
   let spec;
-  try { spec = JSON.parse(t.slice(a, b + 1)); } catch (e) { throw new Error('Receta JSON inválida: ' + e.message); }
+  try { spec = tolerantJSON(r.text); }
+  catch (e) {
+    log(`⚠ Receta con errores de JSON (${short(e.message, 80)}); pido la corrección…`);
+    messages.push({ role: 'assistant', content: r.text.slice(0, 20000) });
+    messages.push({ role: 'user', content: `That JSON is invalid (${e.message}). Return the same recipe as strictly valid JSON: double quotes, no comments, no trailing commas, nothing else.` });
+    const r2 = await chatStream(cfg, messages, cfg.codeModel, 12000, (n) => log(`… ${n} líneas`));
+    spec = tolerantJSON(r2.text);
+    messages.splice(messages.length - 2, 2);
+  }
   messages.push({ role: 'assistant', content: JSON.stringify(spec) });
   return sanitizeWorld(spec);
 }
@@ -922,11 +1075,14 @@ async function runWorld(cfg, job, o, log, quality, project) {
   const name = slugName(spec.name || prompt || 'mundo');
   const dir = path.join(cfg.libraryPath, project, '3d', `${name}_${id}`);
   await fsp.mkdir(dir, { recursive: true });
+  const tod = ['day', 'dawn', 'dusk', 'night'].includes(o.time) ? o.time : null;
+  const todArgs = tod ? ['--time', tod] : [];
+  if (tod) log(`Hora del día: ${{ day: 'día', dawn: 'amanecer', dusk: 'atardecer', night: 'noche' }[tod]}.`);
   const render = async (tag, res, samples) => {
     const specF = path.join(dir, 'world.json');
     await fsp.writeFile(specF, JSON.stringify(spec, null, 2));
     log(`Construyendo “${spec.name}” en Blender (${res}, ${samples} muestras)…`);
-    await runWorldgen(b.path, ['--spec', specF, '--res', res, '--samples', String(samples), '--out', path.join(dir, tag + '.png')], log);
+    await runWorldgen(b.path, ['--spec', specF, '--res', res, '--samples', String(samples), '--out', path.join(dir, tag + '.png'), ...todArgs], log);
   };
   const reviews = o.spec ? 0 : clampInt(o.reviews, 0, 2, quality === 'draft' ? 0 : 1);
   for (let r = 0; r < reviews; r++) {
@@ -943,10 +1099,21 @@ async function runWorld(cfg, job, o, log, quality, project) {
   for (let k = 0; k < Math.min(3, spec.landmarks.length) && quality !== 'draft'; k++) {
     const specF = path.join(dir, 'world.json');
     log(`Plano de detalle ${k + 1}: ${spec.landmarks[k].type}`);
-    await runWorldgen(b.path, ['--spec', specF, '--shot', `lm${k}`, '--res', '1280x720', '--samples', '24', '--out', path.join(dir, `zone_${k + 1}_${spec.landmarks[k].type}.png`)], log).catch((e) => log('⚠ ' + short(e.message, 120)));
+    await runWorldgen(b.path, ['--spec', specF, '--shot', `lm${k}`, '--res', '1280x720', '--samples', '24', '--out', path.join(dir, `zone_${k + 1}_${spec.landmarks[k].type}.png`), ...todArgs], log).catch((e) => log('⚠ ' + short(e.message, 120)));
+  }
+  if (o.playShots !== false) { // vista de juego: cámara RPG elevada y cercana, tilt-shift
+    // primero los lugares habitados (donde estará el jugador), luego el resto
+    const pref = ['village', 'castle', 'port', 'fortress', 'oasis', 'camp', 'world_tree', 'ruins', 'pyramid'];
+    const order = spec.landmarks.map((l, k) => [k, pref.indexOf(l.type)]).filter(([, r]) => r >= 0).sort((x, y) => x[1] - y[1]).map(([k]) => k);
+    const picks = order.slice(0, quality === 'draft' ? 1 : 3);
+    for (let n = 0; n < picks.length; n++) {
+      const k = picks[n];
+      log(`Vista de juego ${n + 1}: ${spec.landmarks[k].type}`);
+      await runWorldgen(b.path, ['--spec', path.join(dir, 'world.json'), '--shot', `play${k}`, '--res', quality === 'draft' ? '960x540' : '1280x720', '--samples', quality === 'draft' ? '12' : '24', '--out', path.join(dir, `play_${n + 1}_${spec.landmarks[k].type}.png`), ...todArgs], log).catch((e) => log('⚠ ' + short(e.message, 120)));
+    }
   }
   await fsp.copyFile(path.join(dir, 'world.png'), path.join(dir, 'thumb.png')).catch(() => {});
-  const meta = { id, name, project, kind: '3d', category: 'world', style: 'cube2dhd', prompt, imagePrompt: spec.description, tags: ['world', 'jrpg', 'blender'], seed: spec.seed, quality, model: `${codeModelLabel(cfg)} + Blender ${b.version}`, worldName: spec.name, template: o.template || null, parent: o.worldId || null, createdAt: new Date().toISOString() };
+  const meta = { id, name, project, kind: '3d', category: 'world', style: 'cube2dhd', prompt, imagePrompt: spec.description, tags: ['world', 'jrpg', 'blender', ...(tod ? [tod] : [])], time: tod || 'day', seed: spec.seed, quality, model: `${codeModelLabel(cfg)} + Blender ${b.version}`, worldName: spec.name, template: o.template || null, parent: o.worldId || null, createdAt: new Date().toISOString() };
   await fsp.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2));
   job.assets.push(await readAsset(cfg, dir));
   log(`✔ Mundo “${spec.name}” guardado (receta world.json reutilizable, render y planos de zona)`);
@@ -967,6 +1134,7 @@ async function runJob(job, o) {
     if (o.action === 'blender-process' || o.action === 'blender-render') return await runBlenderJob(cfg, job, o, log);
     if (o.action === 'game') return await runGame(cfg, job, o, log, project);
     if (o.action === 'world') return await runWorld(cfg, job, o, log, quality, project);
+    if (o.action === 'pack') return await runPack(cfg, job, o, log, quality, project);
     if (o.category === '3d-blender') return await runBuild3D(cfg, job, o, log, quality, project);
 
     const category = TYPES[o.category] ? o.category : '2d-item';
@@ -1174,7 +1342,7 @@ const server = http.createServer(async (req, res) => {
       if (!a) return send(res, 404, { error: 'asset no encontrado' });
       const b = await readBody(req);
       const name = String(b.name || '').replace(/[^\w\-.]/g, '_');
-      if (!/^[\w\-.]{1,80}\.(png|webp|jpg|glb|json)$/i.test(name) || name === 'meta.json') return send(res, 400, { error: 'nombre de archivo no válido' });
+      if (!/^[\w\-.]{1,80}\.(png|webp|jpg|glb|json|tsx|tres)$/i.test(name) || name === 'meta.json') return send(res, 400, { error: 'nombre de archivo no válido' });
       const buf = Buffer.from(String(b.data || '').replace(/^data:[^,]+,/, ''), 'base64');
       await fsp.writeFile(path.join(a.dir, name), buf);
       return send(res, 200, strip(await readAsset(cfg, a.dir)));
@@ -1188,6 +1356,12 @@ const server = http.createServer(async (req, res) => {
       const cfg = loadConfig(); const name = safeName(u.searchParams.get('name') || cfg.project) || 'MiJuego';
       if (req.method === 'POST') return send(res, 200, await saveProject(cfg, name, await readBody(req)));
       return send(res, 200, await loadProject(cfg, name));
+    }
+    if (p === '/api/export' && req.method === 'POST') {
+      const b = await readBody(req);
+      const r = await exportPack(loadConfig(), Array.isArray(b.ids) ? b.ids.map(String) : [], String(b.engine || 'generic'));
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${r.name}"`, 'Content-Length': r.zip.length, 'X-Asset-Count': String(r.count) });
+      return res.end(r.zip);
     }
     if (p === '/api/world-templates') return send(res, 200, await listWorldTemplates());
     if (p === '/api/games') {

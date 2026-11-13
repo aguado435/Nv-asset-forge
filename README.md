@@ -24,6 +24,9 @@
 
 | Función | Qué hace | Dónde se ejecuta |
 |---|---|---|
+| **Pack coherente** ★ | Una frase → un LLM diseña la biblia de estilo y la lista de assets (héroe, enemigos, props, iconos, texturas, fondo, VFX) y FLUX los pinta todos con las mismas reglas visuales | NVIDIA |
+| **Autotiles** ★ | Dos texturas → tileset de 16 tiles con transición orgánica por esquinas (pixel con contorno o HD suave) + `.tsx` de Tiled + `.tres` de Godot 4 con terreno ya configurado | Local (navegador) |
+| **Exportar a motor** ★ | ZIP listo para Godot 4 (`res://nvforge`), Unity (`Assets/NVForge`) o genérico, con `manifest.json` (prompt, semilla, modelo de cada asset) | Local |
 | **Assets 2D** | Personajes, objetos, iconos, texturas repetibles, fondos, UI, efectos VFX y concept art | NVIDIA (FLUX.2 klein, FLUX.1) |
 | **Modelos 3D pro en Blender** | Un LLM modela el asset con un kit de piezas, FLUX.2 pone las texturas y un modelo de visión lo revisa como director de arte | NVIDIA + Blender local |
 | **Assets 3D por IA** | Modelos `.glb` desde texto con TRELLIS (cuando el servicio de NVIDIA está activo) | NVIDIA (TRELLIS) |
@@ -36,6 +39,7 @@
 | **Blender** | Limpieza de malla, escala real en metros, pivote en la base, LODs, exportación FBX / GLB / OBJ / .blend | Local (tu Blender) |
 | **Render Blender** | Sprite sheets de 4/8/16 direcciones y render "hero" con Eevee o Cycles, fondo transparente | Local (tu Blender) |
 | **Visor 3D** | Vista previa, wireframe, estadísticas, render rápido y miniaturas | Local (three.js) |
+| **Mundos 2D-HD** ★ | Diseñador de mundos con hora del día (día, amanecer, atardecer, noche), vistas de juego con cámara RPG elevada y tilt-shift, y viñeta | NVIDIA + Blender |
 | **Prototipo jugable** | Describes el juego y un LLM escribe un juego en Phaser con tus assets; lo puedes ir mejorando | NVIDIA (LLM de código) |
 
 ---
@@ -162,6 +166,10 @@ En la app (panel *Diseñador de mundos*):
 2. **Describe** el mundo o los cambios en lenguaje natural: el LLM de NVIDIA escribe/modifica la receta, se valida y Blender la construye.
 3. Un **director de arte** (modelo de visión) revisa el mapa y el LLM aplica una ronda de mejoras.
 4. **Edita la receta** a mano en el propio panel y reconstruye sin LLM.
+5. Elige **hora del día** (día, amanecer, atardecer, noche: sol, cielo, faroles y ventanas cambian juntos) y genera **vistas de juego**: cámara RPG elevada y cercana sobre cada lugar emblemático, como la que verá el jugador.
+
+![Vistas de juego: aldea al atardecer y castillo de noche](docs/img/world_time.jpg)
+*Vistas de juego generadas automáticamente: la aldea al atardecer y el castillo de noche con las ventanas encendidas.*
 
 ![Plantillas de geografía real](docs/img/templates.jpg)
 *Plantillas editables: Kanto, Madagascar y Australia en estilo cúbico 2D-HD.*
@@ -171,9 +179,25 @@ En la app (panel *Diseñador de mundos*):
 
 ```bash
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/kanto.json --res 1600x900
+blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/aethermoor.json --shot play0 --time dusk
 ```
 
+## Packs, autotiles y exportación
+
+![Pack coherente generado desde una frase](docs/img/pack.jpg)
+*"Cozy farming RPG on a floating island" → 8 assets con la misma biblia de estilo (pixel art 16-bit): héroe, enemigo, props, icono, dos texturas de suelo y un VFX.*
+
+![Autotile en la app](docs/img/ui_autotile.jpg)
+*Autotile hierba + tierra labrada generado en el navegador a partir de dos texturas del pack, con su `.tsx` y su `.tres`.*
+
+- **Pack coherente**: panel *Pack coherente*, describe el juego ("roguelike de criptas élficas: héroe, 3 enemigos, cofre, pociones, iconos, suelo, fondo") y elige cuántos assets. Todos comparten la misma biblia de estilo (que además se guarda como guía del proyecto) y quedan etiquetados `pack:nombre` en la biblioteca.
+- **Autotiles**: abre una textura, elige el segundo terreno en *Tileset*, el tamaño de tile y el modo (*Pixel + contorno* o *Suave HD*). Se guardan en el asset el tileset PNG (4×4 tiles, terreno por esquinas), una vista previa de mapa, el `.tsx` (Wang set de esquinas para Tiled) y el `.tres` (TileSet de Godot 4 con terrain set *Match Corners*). El ruido de la frontera es periódico, así que los tiles encajan sin costuras en cualquier combinación.
+- **Exportar a motor**: marca assets con Ctrl+clic, elige Godot 4 / Unity / genérico y pulsa *Exportar*. El ZIP se genera sin dependencias e incluye un README con los ajustes de importación (p. ej. filtro *Nearest* para pixel art).
+
 ## Ejemplos 2D-HD (Blender)
+
+![The Last Acre al atardecer: vista de juego](docs/img/acre_dusk.jpg)
+*The Last Acre (`examples/last_acre/acre.py`): isla construible con caminos de tierra fundidos con la hierba, plaza, solar libre y edificio en obras, vegetación por capas (hierba, flores, helechos, piedras, arbustos) instanciada con Geometry Nodes, y variantes de día, amanecer, atardecer y noche.*
 
 Scripts listos para ejecutar con Blender 4.x / 5.x (`blender -b -P script.py -- opciones`):
 
@@ -181,13 +205,14 @@ Scripts listos para ejecutar con Blender 4.x / 5.x (`blender -b -P script.py -- 
 |---|---|---|
 | `examples/world/build_world.py` | **Aethermoor**: continente JRPG de cubos con mar, playas, llanuras, bosque y Árbol del Mundo, desierto con pirámide, lago helado, cordillera, cuevas, castillo, fortaleza, islas flotantes y nubes | `--shot world\|fortress\|desert\|frost\|castle\|isles --res 1600x900` |
 | `examples/fortress/build_fortress.py` | Fortaleza modular en un abismo: muralla, torres, puerta, torreón, casas, rampa, estratos, cascada, arroyo; personajes pixel art; exporta cada módulo a GLB/FBX | `--shot hero\|gate\|keep\|party\|abyss --pixel --export-modules` |
+| `examples/last_acre/acre.py` | **The Last Acre**: el Acre flotante con forja, invernadero, alquimia, observatorio, portal, mercado, huerto, trigal, caminos, plaza, solares construibles y la Red de Raíces hacia otros Acres | `--shot play\|play_farm\|play_build\|hero\|iso\|network --time day\|dawn\|dusk\|night --state neutral\|conquer\|destroy` |
 | `examples/diorama_2dhd/diorama_2dhd.py` | Diorama de fantasía oscura con 5 facciones, materiales pixel art PBR, billboards, tilt-shift f/1.8, volumen, AgX y Glare | `--engine CYCLES\|EEVEE --shot hero\|humans\|demons` |
 
 La técnica: **geometría low poly + imágenes FLUX muy detalladas encima** (fachadas con UV por cara, texturas tileables en proyección de caja) + shaders que fingen detalle (oclusión, desgaste en aristas, musgo en la base, hierba según la normal) + **sprites pixel art reales** (resolución nativa, paleta cerrada, interpolación Closest) + cámara de maqueta.
 
 ## Para desarrolladores
 
-- `server.js`: servidor HTTP sin dependencias (Node 18+). API: `/api/generate` (trabajos), `/api/assets`, `/api/project`, `/api/games`, `/api/blender`, `/api/config`.
+- `server.js`: servidor HTTP sin dependencias (Node 18+). API: `/api/generate` (trabajos: assets, `pack`, `world`, `game`…), `/api/export` (ZIP para motores), `/api/assets`, `/api/project`, `/api/games`, `/api/blender`, `/api/config`.
 - `public/index.html`: toda la interfaz en un archivo (three.js desde CDN).
 - `blender/nvf_blender.py`: operaciones `process` y `render`; se puede usar sola: `blender -b -P blender/nvf_blender.py -- trabajo.json`.
 - Atajo: `Ctrl+Enter` en la descripción para generar.
