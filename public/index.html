@@ -297,7 +297,7 @@ details.sec summary::-webkit-details-marker{display:none}
     <!-- Herramientas 2D (locales) -->
     <div class="tools" id="tools2d">
       <div class="tg"><span>Fondo</span><input type="range" id="tol" min="5" max="120" value="38" title="Tolerancia"><button class="btn sm" id="tRemove">Quitar fondo</button><button class="btn sm" id="tCrop">Recortar</button></div>
-      <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><button class="btn sm" id="tPixel">Pixelar</button></div>
+      <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><select id="pxPal" title="Paleta"><option value="auto">Paleta auto</option><option value="pico8">PICO-8</option><option value="sweetie16">Sweetie 16</option><option value="endesga32">Endesga 32</option></select><select id="pxOut" title="Contorno"><option value="selout">Contorno selectivo</option><option value="black">Contorno oscuro</option><option value="none">Sin contorno</option></select><button class="btn sm" id="tPixel">Pixelar</button></div>
       <div class="tg"><span>Tile</span><button class="btn sm" id="tSeam">Hacer tileable</button><button class="btn sm" id="tTile">Ver mosaico</button></div>
       <div class="tg" id="tsGroup"><span>Tileset</span><select id="tsB" title="Segundo terreno (textura de la biblioteca)"></select><select id="tsT" title="Tamaño de tile"><option>16</option><option selected>32</option><option>48</option><option>64</option><option>128</option></select><select id="tsMode"><option value="pixel">Pixel + contorno</option><option value="soft">Suave HD</option></select><button class="btn sm pri" id="tTileset">Crear autotile</button><button class="btn sm" id="tPaint" style="display:none">🖌 Pintar mapa</button></div>
       <div class="tg"><span>Luz 2D</span><button class="btn sm" id="tNormal" title="Normal map para iluminación 2D (Godot, Unity) con vista previa de luz">Normal map + luz</button></div>
@@ -622,8 +622,7 @@ async function autoClean(a) {
   if ((CFG.pixelStyles || []).includes(a.style) && a.category !== '2d-vfx') {
     // pixel art de verdad: rejilla nativa (no "falso pixel art" de 1024 px), paleta cerrada y alfa binario
     const H = { '2d-character': 72, '2d-item': 40, '2d-icon': 32, '2d-ui': 64 }[a.category] || 48;
-    const tw = Math.max(8, Math.round(o.width * H / o.height));
-    const px = pixelateCanvas(o, tw, a.category === '2d-icon' ? 16 : 24);
+    const px = pixelArt(o, { height: H, colors: a.category === '2d-icon' ? 16 : 24, outline: 'selout' });
     r = await post(`/api/assets/${a.id}/file`, { name: `processed_02_pixel_${px.width}x${px.height}.png`, data: px.toDataURL('image/png') });
   }
   return r;
@@ -771,7 +770,7 @@ function resizePOT(target) {
 function updateTile() { const url = cv.toDataURL(); const t = $('#tile'); t.style.backgroundImage = `url(${url})`; const s = Math.min(t.clientWidth, t.clientHeight) / 3; t.style.backgroundSize = `${s}px ${s * cv.height / cv.width}px`; t.style.imageRendering = cv.width <= 512 ? 'pixelated' : 'auto'; }
 $('#tRemove').onclick = () => op(() => removeBg(+$('#tol').value, cv));
 $('#tCrop').onclick = () => op(() => autoCrop());
-$('#tPixel').onclick = () => op(() => pixelate(+$('#pxW').value, Math.max(2, Math.min(64, +$('#pxC').value || 16))));
+$('#tPixel').onclick = () => op(() => setFrom(pixelArt(cv, { width: Math.max(8, Math.min(512, +$('#pxW').value || 64)), colors: Math.max(2, Math.min(64, +$('#pxC').value || 16)), palette: $('#pxPal').value, outline: $('#pxOut').value })));
 $('#tSeam').onclick = () => op(makeSeamless);
 $('#tResize').onclick = () => op(() => resizePOT(+$('#potSel').value));
 $('#tTile').onclick = () => { const on = $('#tile').style.display !== 'block'; if (on) { showView('tile'); updateTile(); $('#tTile').textContent = 'Ver imagen'; } else { showView('v2d'); $('#tTile').textContent = 'Ver mosaico'; } };

@@ -194,6 +194,11 @@ blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/kanto.j
 blender -b -P examples/world/worldgen.py -- --spec examples/world/worlds/aethermoor.json --shot play0 --time dusk
 ```
 
+## Pixel art de verdad
+
+![Antes y después del nuevo pixel art](docs/img/pixel_v2.jpg)
+*Izquierda de cada trío: reducción por media (antes). Centro y derecha: el nuevo motor, cada píxel con el color dominante de su bloque, limpieza de motas, contorno selectivo u oscuro y paletas clásicas (PICO-8, Sweetie 16, Endesga 32) o automática.*
+
 ## Editor de escenas 3D
 
 ![Editor de escenas 3D tipo Blender](docs/img/scene_editor.jpg)

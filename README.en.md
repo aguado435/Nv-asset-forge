@@ -44,6 +44,11 @@
 | **Playable prototype** | Describe the game and an LLM writes a Phaser game with your assets | NVIDIA (code LLM) |
 | **Pick your model** | Choose any image, 3D or LLM model, or add any other build.nvidia.com model by its path | — |
 
+## Real pixel art
+
+![Before and after the new pixel art](docs/img/pixel_v2.jpg)
+*Left of each trio: averaged downscale (before). Center and right: the new engine, every pixel takes its block's dominant color, stray pixels are cleaned, selective or dark outline, and classic palettes (PICO-8, Sweetie 16, Endesga 32) or an automatic one.*
+
 ## Install (once)
 
 1. Install **Node.js 18+** (LTS): https://nodejs.org

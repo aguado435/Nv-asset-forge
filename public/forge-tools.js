@@ -16,6 +16,15 @@ function removeBg(tol, target) {
   for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
   for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
   while (sp) { const p = st[--sp], x = p % w; if (x > 0) push(p - 1); if (x < w - 1) push(p + 1); if (p >= w) push(p - w); if (p < N - w) push(p + w); }
+  // huecos cerrados (entre el brazo y el cuerpo, dentro de un bastón…) del mismo color que el fondo: se quitan si son lo bastante grandes
+  const t2 = tol * 0.6, minA = Math.max(12, Math.round(N * 0.0004)), seen = new Uint8Array(N), comp = new Int32Array(N);
+  for (let p0 = 0; p0 < N; p0++) {
+    if (mark[p0] || seen[p0] || d[p0 * 4 + 3] === 0 || dist(p0) > t2) continue;
+    let n = 0, sp2 = 0; comp[sp2++] = p0; seen[p0] = 1; const list = [];
+    while (sp2) { const p = comp[--sp2]; list.push(p); n++; const x = p % w;
+      for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, p >= w ? p - w : -1, p < N - w ? p + w : -1]) if (q >= 0 && !seen[q] && !mark[q] && dist(q) <= t2) { seen[q] = 1; comp[sp2++] = q; } }
+    if (n >= minA) for (const p of list) mark[p] = 1;
+  }
   // borde suave + descontaminación de color
   for (let p = 0; p < N; p++) {
     if (mark[p]) { d[p * 4 + 3] = 0; continue; }
@@ -257,4 +266,80 @@ class MapPainter {
     return `[gd_scene load_steps=2 format=3]\n\n[ext_resource type="TileSet" path="${tres}" id="1_ts"]\n\n[node name="Mapa" type="TileMap"]\ntile_set = ExtResource("1_ts")\nformat = 2\nlayer_0/name = "Terreno"\nlayer_0/tile_data = PackedInt32Array(${d.join(', ')})\n`;
   }
   toJSON() { return JSON.stringify({ cols: this.cols, rows: this.rows, tile: this.T, corners: Array.from(this.V) }); }
+}
+
+// ───────── Pixel art de verdad (v2): color dominante por bloque, limpieza, contorno y paletas clásicas ─────────
+const PALETTES = {
+  pico8: ['000000', '1d2b53', '7e2553', '008751', 'ab5236', '5f574f', 'c2c3c7', 'fff1e8', 'ff004d', 'ffa300', 'ffec27', '00e436', '29adff', '83769c', 'ff77a8', 'ffccaa'],
+  sweetie16: ['1a1c2c', '5d275d', 'b13e53', 'ef7d57', 'ffcd75', 'a7f070', '38b764', '257179', '29366f', '3b5dc9', '41a6f6', '73eff7', 'f4f4f4', '94b0c2', '566c86', '333c57'],
+  endesga32: ['be4a2f', 'd77643', 'ead4aa', 'e4a672', 'b86f50', '733e39', '3e2731', 'a22633', 'e43b44', 'f77622', 'feae34', 'fee761', '63c74d', '3e8948', '265c42', '193c3e', '124e89', '0099db', '2ce8f5', 'ffffff', 'c0cbdc', '8b9bb4', '5a6988', '3a4466', '262b44', '181425', 'ff0044', '68386c', 'b55088', 'f6757a', 'e8b796', 'c28569'],
+};
+const hexRgb = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+function colorDist(a, b) { const rm = (a[0] + b[0]) / 2, dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2]; return (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db; }
+function nearestIdx(pal, c) { let m = Infinity, bi = 0; for (let i = 0; i < pal.length; i++) { const d = colorDist(pal[i], c); if (d < m) { m = d; bi = i; } } return bi; }
+const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+// opts: { height | width, colors, palette: 'auto'|'pico8'|'sweetie16'|'endesga32'|[[r,g,b]…], outline: 'none'|'selout'|'black', cleanup: true, boost: 1.12 }
+function pixelArt(src, opts = {}) {
+  const W = src.width, H = src.height;
+  const d = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+  let tw = opts.width, th = opts.height;
+  if (tw && !th) th = Math.max(1, Math.round(H * tw / W)); else if (th && !tw) tw = Math.max(1, Math.round(W * th / H)); else if (!tw) { tw = 64; th = Math.round(H * 64 / W); }
+  const boost = opts.boost ?? 1.12;
+  const px = (i) => { // color con un poco más de saturación y contraste: el pixel art lee mejor con colores decididos
+    let r = d[i], g = d[i + 1], b = d[i + 2]; const l = lum([r, g, b]);
+    r = l + (r - l) * boost; g = l + (g - l) * boost; b = l + (b - l) * boost;
+    const k = (v) => Math.max(0, Math.min(255, 128 + (v - 128) * (1 + (boost - 1) * 0.6))); return [k(r), k(g), k(b)];
+  };
+  // 1) paleta
+  let pal;
+  if (Array.isArray(opts.palette)) pal = opts.palette;
+  else if (PALETTES[opts.palette]) pal = PALETTES[opts.palette].map(hexRgb);
+  else {
+    const S = []; const step = Math.max(1, Math.floor((W * H) / 60000));
+    for (let p = 0; p < W * H; p += step) { const i = p * 4; if (d[i + 3] > 160) S.push(...px(i)); }
+    pal = kmeans(S, Math.max(2, Math.min(64, opts.colors || 16)));
+  }
+  if (!pal.length) pal = [[0, 0, 0]];
+  const darkRank = pal.map((c) => 1 - lum(c) / 255);
+  // 2) color dominante por bloque (no la media: así no hay colores sucios)
+  const out = new Int16Array(tw * th).fill(-1);
+  const bw = W / tw, bh = H / th, sx = Math.max(1, Math.floor(bw / 6)), sy = Math.max(1, Math.floor(bh / 6));
+  const cnt = new Float32Array(pal.length);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+    cnt.fill(0); let op = 0, tot = 0;
+    const x0 = Math.floor(x * bw), x1 = Math.max(x0 + 1, Math.floor((x + 1) * bw)), y0 = Math.floor(y * bh), y1 = Math.max(y0 + 1, Math.floor((y + 1) * bh));
+    for (let yy = y0; yy < y1; yy += sy) for (let xx = x0; xx < x1; xx += sx) {
+      const i = (yy * W + xx) * 4; tot++; if (d[i + 3] < 128) continue; op++;
+      const k = nearestIdx(pal, px(i)); cnt[k] += darkRank[k] > 0.82 ? 1.25 : 1; // las líneas muy oscuras pesan algo más para no perder el lineart
+    }
+    if (op * 2 < tot) continue;
+    let best = 0; for (let k = 1; k < pal.length; k++) if (cnt[k] > cnt[best]) best = k; out[y * tw + x] = best;
+  }
+  // 3) limpieza: motas sueltas de alfa y píxeles huérfanos de color
+  if (opts.cleanup !== false) {
+    const at = (x, y) => (x < 0 || y < 0 || x >= tw || y >= th ? -1 : out[y * tw + x]);
+    for (let pass = 0; pass < 2; pass++) for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+      const v = out[y * tw + x]; const nb = [at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)];
+      if (v >= 0 && nb.filter((n) => n >= 0).length <= 1) { out[y * tw + x] = -1; continue; }
+      if (v < 0 || nb.some((n) => n < 0) || nb.includes(v)) continue;
+      const f = {}; let bn = nb[0]; for (const n of nb) { f[n] = (f[n] || 0) + 1; if (f[n] > f[bn]) bn = n; } if (f[bn] >= 2) out[y * tw + x] = bn;
+    }
+  }
+  // 4) contorno exterior de 1 px (lienzo +1 px por lado)
+  const ol = opts.outline || 'none', pad = ol === 'none' ? 0 : 1, OW = tw + pad * 2, OH = th + pad * 2;
+  const c = document.createElement('canvas'); c.width = OW; c.height = OH; const cx = c.getContext('2d'); const id = cx.createImageData(OW, OH), o = id.data;
+  const put = (x, y, col) => { const i = (y * OW + x) * 4; o[i] = col[0]; o[i + 1] = col[1]; o[i + 2] = col[2]; o[i + 3] = 255; };
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) { const v = out[y * tw + x]; if (v >= 0) put(x + pad, y + pad, pal[v]); }
+  if (pad) {
+    const darkest = pal.reduce((a, b) => (lum(b) < lum(a) ? b : a));
+    const inside = (x, y) => x >= 0 && y >= 0 && x < tw && y < th && out[y * tw + x] >= 0;
+    for (let y = -1; y <= th; y++) for (let x = -1; x <= tw; x++) {
+      if (inside(x, y)) continue;
+      const nbs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => inside(x + dx, y + dy)); if (!nbs.length) continue;
+      let col = darkest;
+      if (ol === 'selout') { const [dx, dy] = nbs[0]; const n = pal[out[(y + dy) * tw + x + dx]]; col = pal[nearestIdx(pal, n.map((v) => v * 0.42))]; if (lum(col) > lum(n) * 0.75) col = darkest; }
+      put(x + pad, y + pad, col);
+    }
+  }
+  cx.putImageData(id, 0, 0); c.palette = pal; return c;
 }

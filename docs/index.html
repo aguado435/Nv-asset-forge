@@ -126,8 +126,9 @@ section{scroll-margin-top:58px}
         <label for="tolS">Tolerancia del fondo</label><input type="range" id="tolS" min="5" max="120" value="38">
         <label for="hS">Alto del pixel art (px)</label><input type="number" id="hS" value="64" min="12" max="256">
         <label for="colS">Colores de la paleta</label><input type="number" id="colS" value="20" min="2" max="64">
+        <div class="row2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label for="palS">Paleta</label><select id="palS"><option value="auto">Auto</option><option value="pico8">PICO-8</option><option value="sweetie16">Sweetie 16</option><option value="endesga32">Endesga 32</option></select></div><div><label for="olS">Contorno</label><select id="olS"><option value="selout">Selectivo</option><option value="black">Oscuro</option><option value="none">Ninguno</option></select></div></div>
         <div class="row"><button class="btn pri sm" id="runS">Procesar</button><button class="btn sm" id="dlS1" disabled>⬇ Limpio</button><button class="btn sm" id="dlS2" disabled>⬇ Pixel art</button><button class="btn sm" id="dlS3" disabled>⬇ Normal map</button></div>
-        <p class="note">Quita el fondo por inundación desde los bordes (con borde suave y sin halo), recorta, y reduce a la rejilla nativa con paleta cerrada por k-means y alfa binario. El normal map sirve para luz 2D en Godot (CanvasTexture) y Unity (Sprite Lit): pasa el ratón por la vista "luz 2D".</p>
+        <p class="note">Quita el fondo por inundación desde los bordes (con borde suave y sin halo), recorta, y reduce a la rejilla nativa con paleta cerrada por k-means y alfa binario. Cada píxel toma el color dominante de su bloque (no la media), se limpian motas sueltas y se añade contorno. El normal map sirve para luz 2D en Godot (CanvasTexture) y Unity (Sprite Lit): pasa el ratón por la vista "luz 2D".</p>
       </div>
       <div class="out" id="outS"><div class="empty">Sube un personaje, un objeto o un icono generado por IA.</div></div>
     </div>
@@ -214,7 +215,7 @@ $('#runS').onclick = () => {
   const pad = Math.round(Math.max(bx.w, bx.h) * 0.04);
   CLEAN = document.createElement('canvas'); CLEAN.width = bx.w + pad * 2; CLEAN.height = bx.h + pad * 2; CLEAN.getContext('2d').drawImage(c, -bx.x0 + pad, -bx.y0 + pad);
   const H = Math.max(12, Math.min(256, +$('#hS').value || 64));
-  PIX = pixelateCanvas(CLEAN, Math.max(8, Math.round(CLEAN.width * H / CLEAN.height)), Math.max(2, Math.min(64, +$('#colS').value || 20)));
+  PIX = pixelArt(CLEAN, { height: H, colors: Math.max(2, Math.min(64, +$('#colS').value || 20)), palette: $('#palS').value, outline: $('#olS').value });
   const out = $('#outS'); out.innerHTML = '';
   const show = document.createElement('canvas'); const k = Math.min(1, 420 / CLEAN.height); show.width = CLEAN.width * k; show.height = CLEAN.height * k; show.getContext('2d').drawImage(CLEAN, 0, 0, show.width, show.height); show.style.imageRendering = 'auto';
   out.append(fig(show, `limpio · ${CLEAN.width}×${CLEAN.height}`));
