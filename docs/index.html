@@ -108,8 +108,8 @@ section{scroll-margin-top:58px}
     <div class="card"><span class="k">Coherencia</span><h3>Packs con un solo estilo</h3><p>Una frase y un LLM diseña la biblia de estilo y la lista de assets: héroe, enemigos, objetos, iconos, texturas, fondo y VFX. Todo parece del mismo juego.</p></div>
     <div class="card"><span class="k">Aprende de ti</span><h3>Favoritos que enseñan</h3><p>Marca con ★ lo que te gusta y sus prompts guían cada nueva generación del proyecto. El estilo se afina sin reentrenar nada.</p></div>
     <div class="card"><span class="k">Recetas</span><h3>Prompts de estudio</h3><p>Recetas probadas por categoría y estilos curados: HD-2D, cozy pixel, metroidvania gótico, fantasía sombría, casual móvil, isométrico…</p></div>
-    <div class="card"><span class="k">Listo para el motor</span><h3>Limpieza automática</h3><p>Los sprites salen sin fondo y recortados, los VFX con alfa por luminancia y, en estilos pixel, una versión de pixel art real a resolución nativa.</p></div>
-    <div class="card"><span class="k">Mapas</span><h3>Autotiles + Godot + Tiled</h3><p>Dos texturas → 16 tiles de terreno por esquinas que encajan sin costuras, con el TileSet de Godot 4 y el Wang set de Tiled ya configurados.</p></div>
+    <div class="card"><span class="k">Listo para el motor</span><h3>Limpieza, pixel art y luz 2D</h3><p>Sprites sin fondo y recortados, pixel art real a resolución nativa, una paleta común para todo el pack y normal maps para iluminación 2D.</p></div>
+    <div class="card"><span class="k">Mapas</span><h3>Autotiles y pintor de mapas</h3><p>Dos texturas → 16 tiles que encajan sin costuras. Pinta el nivel con el pincel y exporta el mapa a Tiled (.tmx) y a Godot (.tscn) con su TileSet.</p></div>
     <div class="card"><span class="k">3D y mundos</span><h3>Blender hace el trabajo</h3><p>Modelos 3D revisados por un director de arte con visión, LODs y FBX, y mundos 2D-HD con día, atardecer y noche y vistas de juego.</p></div>
   </div>
 </div></section>
@@ -118,7 +118,7 @@ section{scroll-margin-top:58px}
   <h2>Forge Lite: pruébalo ahora, en el navegador</h2>
   <p class="sub">Las herramientas de limpieza y de mapas de NV Asset Forge funcionan aquí mismo, sin clave ni servidor: tus imágenes no salen de tu ordenador. La generación con IA, los packs y Blender están en la app completa.</p>
   <div class="lite">
-    <div class="tabs"><button class="on" data-p="pSprite">Sprite limpio + pixel art real</button><button data-p="pTile">Autotile de terreno</button></div>
+    <div class="tabs"><button class="on" data-p="pSprite">Sprite limpio + pixel art real</button><button data-p="pTile">Autotile + pintor de mapas</button></div>
 
     <div class="pane on" id="pSprite">
       <div class="ctl">
@@ -126,8 +126,8 @@ section{scroll-margin-top:58px}
         <label for="tolS">Tolerancia del fondo</label><input type="range" id="tolS" min="5" max="120" value="38">
         <label for="hS">Alto del pixel art (px)</label><input type="number" id="hS" value="64" min="12" max="256">
         <label for="colS">Colores de la paleta</label><input type="number" id="colS" value="20" min="2" max="64">
-        <div class="row"><button class="btn pri sm" id="runS">Procesar</button><button class="btn sm" id="dlS1" disabled>⬇ Limpio</button><button class="btn sm" id="dlS2" disabled>⬇ Pixel art</button></div>
-        <p class="note">Quita el fondo por inundación desde los bordes (con borde suave y sin halo), recorta, y reduce a la rejilla nativa con paleta cerrada por k-means y alfa binario.</p>
+        <div class="row"><button class="btn pri sm" id="runS">Procesar</button><button class="btn sm" id="dlS1" disabled>⬇ Limpio</button><button class="btn sm" id="dlS2" disabled>⬇ Pixel art</button><button class="btn sm" id="dlS3" disabled>⬇ Normal map</button></div>
+        <p class="note">Quita el fondo por inundación desde los bordes (con borde suave y sin halo), recorta, y reduce a la rejilla nativa con paleta cerrada por k-means y alfa binario. El normal map sirve para luz 2D en Godot (CanvasTexture) y Unity (Sprite Lit): pasa el ratón por la vista "luz 2D".</p>
       </div>
       <div class="out" id="outS"><div class="empty">Sube un personaje, un objeto o un icono generado por IA.</div></div>
     </div>
@@ -139,10 +139,13 @@ section{scroll-margin-top:58px}
         <label for="tT">Tamaño de tile</label><select id="tT"><option>16</option><option selected>32</option><option>48</option><option>64</option><option>128</option></select>
         <label for="tM">Modo</label><select id="tM"><option value="pixel">Pixel + contorno</option><option value="soft">Suave HD</option></select>
         <div class="row"><button class="btn pri sm" id="runT">Crear autotile</button></div>
-        <div class="row"><button class="btn sm" id="dlT1" disabled>⬇ PNG</button><button class="btn sm" id="dlT2" disabled>⬇ Tiled .tsx</button><button class="btn sm" id="dlT3" disabled>⬇ Godot .tres</button></div>
-        <p class="note">Usa texturas tileables. El ruido de la frontera es periódico, así que los 16 tiles encajan sin costuras en cualquier combinación.</p>
+        <div class="row"><button class="btn sm" id="dlT1" disabled>⬇ Tileset</button><button class="btn sm" id="dlT2" disabled>⬇ .tsx</button><button class="btn sm" id="dlT3" disabled>⬇ .tres</button></div>
+        <label for="mpB">Pincel del mapa</label><input type="range" id="mpB" min="1" max="6" value="2">
+        <div class="row"><button class="btn sm" id="mpR" disabled>🎲 Aleatorio</button><button class="btn sm" id="mpU" disabled>↶</button></div>
+        <div class="row"><button class="btn sm" id="mp1" disabled>⬇ Mapa PNG</button><button class="btn sm" id="mp2" disabled>⬇ Tiled .tmx</button><button class="btn sm" id="mp3" disabled>⬇ Godot .tscn</button></div>
+        <p class="note">Pinta sobre el mapa: clic pone terreno B, clic derecho o Mayús pone A. Descarga el tileset, su .tsx/.tres y el mapa en la misma carpeta y ábrelo en Tiled o Godot. Las texturas se hacen tileables solas.</p>
       </div>
-      <div class="out" id="outT"><div class="empty">Sube dos texturas para ver el tileset y un mapa de ejemplo.</div></div>
+      <div class="out" id="outT"><div class="empty">Sube dos texturas para crear el tileset y pintar un mapa.</div></div>
     </div>
   </div>
 </div></section>
@@ -176,168 +179,9 @@ node server.js</pre></div></div>
 
 <footer><div class="wrap">NV Asset Forge · código abierto · <a href="https://github.com/aguado435/Nv-asset-forge">GitHub</a> · hecho con NVIDIA Build y Blender</div></footer>
 
+<script src="forge-tools.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
-// ── herramientas compartidas con la app (public/index.html) ──
-function cornerColor(d, w, h) {
-  const pts = []; const s = Math.max(2, Math.round(Math.min(w, h) * 0.01));
-  for (const [cx, cy] of [[0, 0], [w - s, 0], [0, h - s], [w - s, h - s]]) for (let y = cy; y < cy + s; y++) for (let x = cx; x < cx + s; x++) { const i = (y * w + x) * 4; pts.push([d[i], d[i + 1], d[i + 2]]); }
-  const med = (k) => pts.map((p) => p[k]).sort((a, b) => a - b)[pts.length >> 1];
-  return [med(0), med(1), med(2)];
-}
-
-function removeBg(tol, target = cv) {
-  const tx = target.getContext('2d', { willReadFrequently: true });
-  const w = target.width, h = target.height, id = tx.getImageData(0, 0, w, h), d = id.data;
-  const bg = cornerColor(d, w, h);
-  const dist = (p) => { const i = p * 4; const r = d[i] - bg[0], g = d[i + 1] - bg[1], b = d[i + 2] - bg[2]; return Math.sqrt(r * r + g * g + b * b); };
-  const N = w * h, mark = new Uint8Array(N), st = new Int32Array(N); let sp = 0;
-  const push = (p) => { if (!mark[p] && d[p * 4 + 3] > 0 && dist(p) <= tol) { mark[p] = 1; st[sp++] = p; } };
-  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
-  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
-  while (sp) { const p = st[--sp], x = p % w; if (x > 0) push(p - 1); if (x < w - 1) push(p + 1); if (p >= w) push(p - w); if (p < N - w) push(p + w); }
-  // borde suave + descontaminación de color
-  for (let p = 0; p < N; p++) {
-    if (mark[p]) { d[p * 4 + 3] = 0; continue; }
-    const x = p % w;
-    const near = (x > 0 && mark[p - 1]) || (x < w - 1 && mark[p + 1]) || (p >= w && mark[p - w]) || (p < N - w && mark[p + w]);
-    if (!near) continue;
-    const dd = dist(p); if (dd > tol * 2.2) continue;
-    const a = Math.max(0.15, Math.min(1, (dd - tol) / (tol * 1.2)));
-    const i = p * 4;
-    for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, (d[i + k] - bg[k] * (1 - a)) / a));
-    d[i + 3] = Math.round(d[i + 3] * a);
-  }
-  tx.putImageData(id, 0, 0);
-}
-
-function alphaBox(c) {
-  const w = c.width, h = c.height, d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-  let x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-}
-
-function kmeans(px, k) {
-  const n = px.length / 3; if (!n) return [];
-  const C = [];
-  C.push([px[0], px[1], px[2]]);
-  while (C.length < Math.min(k, n)) { // k-means++ aproximado
-    let best = -1, bi = 0;
-    for (let s = 0; s < 400; s++) { const i = Math.floor(Math.random() * n) * 3; let m = Infinity; for (const c of C) { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; m = Math.min(m, dr * dr + dg * dg + db * db); } if (m > best) { best = m; bi = i; } }
-    C.push([px[bi], px[bi + 1], px[bi + 2]]);
-  }
-  const asg = new Uint8Array(n);
-  for (let it = 0; it < 10; it++) {
-    const S = C.map(() => [0, 0, 0, 0]);
-    for (let j = 0; j < n; j++) { const i = j * 3; let m = Infinity, mi = 0; C.forEach((c, ci) => { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; mi = ci; } }); asg[j] = mi; const s = S[mi]; s[0] += px[i]; s[1] += px[i + 1]; s[2] += px[i + 2]; s[3]++; }
-    S.forEach((s, ci) => { if (s[3]) C[ci] = [s[0] / s[3], s[1] / s[3], s[2] / s[3]]; });
-  }
-  return C.map((c) => c.map(Math.round));
-}
-
-function pixelateCanvas(base, tw, colors) {
-  tw = Math.max(8, Math.min(512, tw | 0)); const th = Math.max(1, Math.round(base.height * tw / base.width));
-  // reducción por pasos para promediar bien
-  let src = base;
-  while (src.width / 2 > tw) { const c = document.createElement('canvas'); c.width = Math.round(src.width / 2); c.height = Math.round(src.height / 2); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); src = c; }
-  const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th);
-  const id = x.getImageData(0, 0, tw, th), d = id.data, px = [];
-  for (let i = 0; i < d.length; i += 4) { d[i + 3] = d[i + 3] < 128 ? 0 : 255; if (d[i + 3]) px.push(d[i], d[i + 1], d[i + 2]); }
-  const pal = kmeans(px, colors);
-  for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; let m = Infinity, b = pal[0]; for (const p of pal) { const dr = d[i] - p[0], dg = d[i + 1] - p[1], db = d[i + 2] - p[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; b = p; } } d[i] = b[0]; d[i + 1] = b[1]; d[i + 2] = b[2]; }
-  x.putImageData(id, 0, 0); return c;
-}
-
-function periodicNoise(n, seed) { // ruido de valor periódico (n celdas por tile), continuo entre tiles
-  const g = []; let s = seed >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < n * n; i++) g.push(rnd());
-  const f = (t) => t * t * (3 - 2 * t);
-  return (u, v) => { const x = u * n, y = v * n, x0 = Math.floor(x), y0 = Math.floor(y), fx = f(x - x0), fy = f(y - y0);
-    const G = (i, j) => g[((j % n + n) % n) * n + ((i % n + n) % n)];
-    const a = G(x0, y0) + (G(x0 + 1, y0) - G(x0, y0)) * fx, b = G(x0, y0 + 1) + (G(x0 + 1, y0 + 1) - G(x0, y0 + 1)) * fx; return a + (b - a) * fy; };
-}
-
-function texPixels(img, T) { const c = document.createElement('canvas'); c.width = c.height = T; const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, T, T); return x.getImageData(0, 0, T, T).data; }
-function buildAutotile(imgA, imgB, T, mode) {
-  const A = texPixels(imgA, T), B = texPixels(imgB, T);
-  const n1 = periodicNoise(3, 7), n2 = periodicNoise(7, 19);
-  const out = document.createElement('canvas'); out.width = out.height = T * 4; const ox = out.getContext('2d'); const id = ox.createImageData(T * 4, T * 4); const D = id.data;
-  const mask = (c, u, v) => { const w = (c[0] * (1 - u) + c[1] * u) * (1 - v) + (c[3] * (1 - u) + c[2] * u) * v;
-    return w + ((n1(u, v) - 0.5) * 0.42 + (n2(u, v) - 0.5) * 0.16) * Math.min(1, 4 * w * (1 - w) + 0.15); };
-  for (let i = 0; i < 16; i++) {
-    const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1].map(Number); // TL, TR, BR, BL (1 = terreno B)
-    const tx = (i % 4) * T, ty = Math.floor(i / 4) * T;
-    const M = new Float32Array(T * T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) M[y * T + x] = mask(c, (x + 0.5) / T, (y + 0.5) / T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
-      const m = M[y * T + x], k = (y * T + x) * 4, o = ((ty + y) * T * 4 + tx + x) * 4;
-      let t, shade = 1;
-      if (mode === 'pixel') {
-        t = m >= 0.5 ? 1 : 0;
-        if (t) { const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = x + dx, Y = y + dy; return X >= 0 && Y >= 0 && X < T && Y < T && M[Y * T + X] < 0.5; }); if (nb) shade = 0.45; }
-        else if (m > 0.5 - 1.6 / T) shade = 0.72; // sombra de contacto en el lado A
-      } else {
-        const e = 0.06; t = Math.max(0, Math.min(1, (m - 0.5 + e) / (2 * e))); t = t * t * (3 - 2 * t);
-        const edge = Math.max(0, 1 - Math.abs(m - 0.5) / 0.14); shade = 1 - 0.28 * edge * (m < 0.5 ? 1 : 0.4);
-      }
-      for (let ch = 0; ch < 3; ch++) D[o + ch] = Math.max(0, Math.min(255, (A[k + ch] * (1 - t) + B[k + ch] * t) * shade));
-      D[o + 3] = 255;
-    }
-  }
-  ox.putImageData(id, 0, 0); return out;
-}
-
-function buildAutotile(imgA, imgB, T, mode) {
-  const A = texPixels(imgA, T), B = texPixels(imgB, T);
-  const n1 = periodicNoise(3, 7), n2 = periodicNoise(7, 19);
-  const out = document.createElement('canvas'); out.width = out.height = T * 4; const ox = out.getContext('2d'); const id = ox.createImageData(T * 4, T * 4); const D = id.data;
-  const mask = (c, u, v) => { const w = (c[0] * (1 - u) + c[1] * u) * (1 - v) + (c[3] * (1 - u) + c[2] * u) * v;
-    return w + ((n1(u, v) - 0.5) * 0.42 + (n2(u, v) - 0.5) * 0.16) * Math.min(1, 4 * w * (1 - w) + 0.15); };
-  for (let i = 0; i < 16; i++) {
-    const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1].map(Number); // TL, TR, BR, BL (1 = terreno B)
-    const tx = (i % 4) * T, ty = Math.floor(i / 4) * T;
-    const M = new Float32Array(T * T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) M[y * T + x] = mask(c, (x + 0.5) / T, (y + 0.5) / T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
-      const m = M[y * T + x], k = (y * T + x) * 4, o = ((ty + y) * T * 4 + tx + x) * 4;
-      let t, shade = 1;
-      if (mode === 'pixel') {
-        t = m >= 0.5 ? 1 : 0;
-        if (t) { const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = x + dx, Y = y + dy; return X >= 0 && Y >= 0 && X < T && Y < T && M[Y * T + X] < 0.5; }); if (nb) shade = 0.45; }
-        else if (m > 0.5 - 1.6 / T) shade = 0.72; // sombra de contacto en el lado A
-      } else {
-        const e = 0.06; t = Math.max(0, Math.min(1, (m - 0.5 + e) / (2 * e))); t = t * t * (3 - 2 * t);
-        const edge = Math.max(0, 1 - Math.abs(m - 0.5) / 0.14); shade = 1 - 0.28 * edge * (m < 0.5 ? 1 : 0.4);
-      }
-      for (let ch = 0; ch < 3; ch++) D[o + ch] = Math.max(0, Math.min(255, (A[k + ch] * (1 - t) + B[k + ch] * t) * shade));
-      D[o + 3] = 255;
-    }
-  }
-  ox.putImageData(id, 0, 0); return out;
-}
-
-function autotilePreview(sheet, T, cols = 14, rows = 9) {
-  const V = []; for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) { const d = Math.hypot(i - cols / 2, (j - rows / 2) * 1.4); const d2 = Math.hypot(i - cols * 0.18, (j - rows * 0.2) * 1.3); V.push(d < 3.2 + Math.sin(i * 1.7 + j) * 0.9 || d2 < 1.6 ? 1 : 0); }
-  const P = document.createElement('canvas'); P.width = cols * T; P.height = rows * T; const px = P.getContext('2d'); px.imageSmoothingEnabled = false;
-  const at = (i, j) => V[j * (cols + 1) + i];
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const idx = at(i, j) | at(i + 1, j) << 1 | at(i + 1, j + 1) << 2 | at(i, j + 1) << 3; px.drawImage(sheet, (idx % 4) * T, Math.floor(idx / 4) * T, T, T, i * T, j * T, T, T); }
-  return P;
-}
-
-function tilesetTSX(name, png, T, nameA, nameB) {
-  let w = ''; for (let i = 0; i < 16; i++) { const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1].map((v) => v + 1); w += `   <wangtile tileid="${i}" wangid="0,${c[1]},0,${c[2]},0,${c[3]},0,${c[0]}"/>\n`; }
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<tileset version="1.10" tiledversion="1.11.0" name="${name}" tilewidth="${T}" tileheight="${T}" tilecount="16" columns="4">\n <image source="${png}" width="${T * 4}" height="${T * 4}"/>\n <wangsets>\n  <wangset name="${name}" type="corner" tile="-1">\n   <wangcolor name="${nameA}" color="#4a8f3c" tile="0" probability="1"/>\n   <wangcolor name="${nameB}" color="#a5773f" tile="15" probability="1"/>\n${w}  </wangset>\n </wangsets>\n</tileset>\n`;
-}
-
-function tilesetTRES(png, T, nameA, nameB) {
-  const bits = ['top_left_corner', 'top_right_corner', 'bottom_right_corner', 'bottom_left_corner'];
-  let t = '';
-  for (let i = 0; i < 16; i++) { const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1]; const k = `${i % 4}:${Math.floor(i / 4)}/0`;
-    t += `${k} = 0\n${k}/terrain_set = 0\n${k}/terrain = ${c.reduce((a, b) => a + b, 0) >= 2 ? 1 : 0}\n` + bits.map((b, j) => `${k}/terrains_peering_bit/${b} = ${c[j]}\n`).join(''); }
-  return `[gd_resource type="TileSet" load_steps=3 format=3]\n\n[ext_resource type="Texture2D" path="${png}" id="1_tex"]\n\n[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]\ntexture = ExtResource("1_tex")\ntexture_region_size = Vector2i(${T}, ${T})\n${t}\n[resource]\ntile_size = Vector2i(${T}, ${T})\nterrain_set_0/mode = 1\nterrain_set_0/terrain_0/name = "${nameA}"\nterrain_set_0/terrain_0/color = Color(0.29, 0.56, 0.24, 1)\nterrain_set_0/terrain_1/name = "${nameB}"\nterrain_set_0/terrain_1/color = Color(0.65, 0.47, 0.25, 1)\nsources/0 = SubResource("TileSetAtlasSource_1")\n`;
-}
-
 // ── utilidades de la página ──
 function loadFile(input, prev) {
   return new Promise((res) => {
@@ -360,7 +204,7 @@ document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.id === b.dataset.p));
 });
 // ── Sprite ──
-let IMG_S = null, CLEAN = null, PIX = null;
+let IMG_S = null, CLEAN = null, PIX = null, NORM = null;
 wireDrop($('#dropS'), $('#fileS'));
 $('#fileS').onchange = async () => { IMG_S = await loadFile($('#fileS'), $('#prevS')); if (IMG_S) $('#runS').click(); };
 $('#runS').onclick = () => {
@@ -375,12 +219,27 @@ $('#runS').onclick = () => {
   const show = document.createElement('canvas'); const k = Math.min(1, 420 / CLEAN.height); show.width = CLEAN.width * k; show.height = CLEAN.height * k; show.getContext('2d').drawImage(CLEAN, 0, 0, show.width, show.height); show.style.imageRendering = 'auto';
   out.append(fig(show, `limpio · ${CLEAN.width}×${CLEAN.height}`));
   out.append(fig(scaled(PIX, Math.max(1, Math.floor(420 / PIX.height))), `pixel art real · ${PIX.width}×${PIX.height}`));
-  $('#dlS1').disabled = $('#dlS2').disabled = false;
+  // luz 2D interactiva sobre una versión reducida
+  NORM = normalMapCanvas(CLEAN);
+  const kk = Math.min(1, 300 / Math.max(CLEAN.width, CLEAN.height)); const sm = (c) => { const o = document.createElement('canvas'); o.width = Math.round(c.width * kk); o.height = Math.round(c.height * kk); o.getContext('2d').drawImage(c, 0, 0, o.width, o.height); return o; };
+  const cs = sm(CLEAN), ns = sm(NORM); const lv = document.createElement('canvas'); lv.width = cs.width; lv.height = cs.height; lv.style.width = Math.round(cs.width * 420 / cs.height) + 'px'; lv.style.imageRendering = 'auto'; lv.style.background = '#0b0d10'; lv.style.borderRadius = '8px';
+  const lx = lv.getContext('2d'); const draw = (x, y) => { lx.clearRect(0, 0, lv.width, lv.height); lx.drawImage(litPreview(cs, ns, x, y), 0, 0); };
+  draw(cs.width * 0.85, cs.height * 0.2);
+  lv.onpointermove = (e) => { const r = lv.getBoundingClientRect(); draw((e.clientX - r.left) / r.width * cs.width, (e.clientY - r.top) / r.height * cs.height); };
+  out.append(fig(lv, 'luz 2D · mueve el ratón'));
+  $('#dlS1').disabled = $('#dlS2').disabled = $('#dlS3').disabled = false;
 };
 $('#dlS1').onclick = () => CLEAN && download('sprite_limpio.png', CLEAN.toDataURL('image/png'));
+$('#dlS3').onclick = () => NORM && download('sprite_limpio_n.png', NORM.toDataURL('image/png'));
 $('#dlS2').onclick = () => PIX && download(`sprite_pixel_${PIX.width}x${PIX.height}.png`, PIX.toDataURL('image/png'));
 // ── Autotile ──
-let IMG_A = null, IMG_B = null, SHEET = null, TS = 32;
+let IMG_A = null, IMG_B = null, SHEET = null, TS = 32, MP = null;
+$('#mpB').oninput = () => { if (MP) MP.brush = +$('#mpB').value; };
+$('#mpR').onclick = () => MP && MP.random(Math.floor(Math.random() * 1e6));
+$('#mpU').onclick = () => MP && MP.undo();
+$('#mp1').onclick = () => MP && download('mapa.png', MP.toCanvas().toDataURL('image/png'));
+$('#mp2').onclick = () => MP && download('mapa.tmx', new Blob([MP.toTMX(tsName() + '.tsx')], { type: 'application/xml' }));
+$('#mp3').onclick = () => MP && download('mapa.tscn', new Blob([MP.toTSCN(tsName() + '.tres')], { type: 'text/plain' }));
 wireDrop($('#dropA'), $('#fileA')); wireDrop($('#dropB'), $('#fileB'));
 $('#fileA').onchange = async () => { IMG_A = await loadFile($('#fileA'), $('#prevA')); if (IMG_A && IMG_B) $('#runT').click(); };
 $('#fileB').onchange = async () => { IMG_B = await loadFile($('#fileB'), $('#prevB')); if (IMG_A && IMG_B) $('#runT').click(); };
@@ -389,10 +248,10 @@ $('#runT').onclick = () => {
   TS = +$('#tT').value; SHEET = buildAutotile(IMG_A, IMG_B, TS, $('#tM').value);
   const out = $('#outT'); out.innerHTML = '';
   out.append(fig(scaled(SHEET, Math.max(1, Math.floor(256 / SHEET.width))), `tileset 4×4 · ${TS}px`));
-  const prev = autotilePreview(SHEET, TS); const k = Math.min(2, 640 / prev.width);
-  const pc = document.createElement('canvas'); pc.width = prev.width * k; pc.height = prev.height * k; const px = pc.getContext('2d'); px.imageSmoothingEnabled = false; px.drawImage(prev, 0, 0, pc.width, pc.height);
-  out.append(fig(pc, 'mapa de ejemplo con los 16 tiles'));
-  $('#dlT1').disabled = $('#dlT2').disabled = $('#dlT3').disabled = false;
+  const pc = document.createElement('canvas'); pc.style.width = '100%'; pc.style.maxWidth = '720px'; pc.style.cursor = 'crosshair'; pc.style.touchAction = 'none';
+  MP = new MapPainter(pc, SHEET, TS, { cols: Math.round(960 / TS), rows: Math.round(560 / TS) }); MP.brush = +$('#mpB').value; MP.random(7);
+  const f = fig(pc, 'pinta aquí: clic = B · clic derecho = A'); f.style.width = '100%'; out.append(f);
+  for (const id of ['dlT1', 'dlT2', 'dlT3', 'mpR', 'mpU', 'mp1', 'mp2', 'mp3']) $('#' + id).disabled = false;
 };
 const tsName = () => `tileset_${TS}`;
 $('#dlT1').onclick = () => SHEET && download(tsName() + '.png', SHEET.toDataURL('image/png'));

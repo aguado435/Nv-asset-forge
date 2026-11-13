@@ -1414,7 +1414,7 @@ const server = http.createServer(async (req, res) => {
       if (!a) return send(res, 404, { error: 'asset no encontrado' });
       const b = await readBody(req);
       const name = String(b.name || '').replace(/[^\w\-.]/g, '_');
-      if (!/^[\w\-.]{1,80}\.(png|webp|jpg|glb|json|tsx|tres)$/i.test(name) || name === 'meta.json') return send(res, 400, { error: 'nombre de archivo no válido' });
+      if (!/^[\w\-.]{1,80}\.(png|webp|jpg|glb|json|tsx|tres|tmx|tscn)$/i.test(name) || name === 'meta.json') return send(res, 400, { error: 'nombre de archivo no válido' });
       const buf = Buffer.from(String(b.data || '').replace(/^data:[^,]+,/, ''), 'base64');
       await fsp.writeFile(path.join(a.dir, name), buf);
       return send(res, 200, strip(await readAsset(cfg, a.dir)));

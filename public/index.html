@@ -129,6 +129,15 @@ textarea{resize:vertical;min-height:84px}
 .sep{height:1px;background:var(--line);margin:16px 0}
 .fav.on{color:#ffd166;border-color:#ffd166}
 .card .st{position:absolute;right:6px;top:4px;color:#ffd166;font-size:14px;text-shadow:0 1px 2px #000;z-index:2}
+.studio{position:fixed;inset:0;z-index:70;background:var(--bg);display:none;flex-direction:column}
+.studio.show{display:flex}
+.studio .sbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.studio .stt{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1}
+.studio .stt label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.studio .stt input[type=number]{width:64px}
+.studio .sbody{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;gap:24px;flex-wrap:wrap}
+.studio canvas{image-rendering:pixelated;box-shadow:0 10px 40px rgba(0,0,0,.5);border-radius:4px}
+.seg2 button.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
 .jobsbtn.on{border-color:var(--acc);color:var(--acc)} .jobsbtn span{font-weight:700;margin-left:4px}
 .jobsdock{position:fixed;right:18px;top:62px;width:380px;max-height:70vh;overflow:auto;background:var(--panel2);border:1px solid var(--line2);border-radius:12px;z-index:50;display:none;box-shadow:0 18px 50px rgba(0,0,0,.45)}
 .jobsdock.show{display:block}
@@ -286,7 +295,8 @@ details.sec summary::-webkit-details-marker{display:none}
       <div class="tg"><span>Fondo</span><input type="range" id="tol" min="5" max="120" value="38" title="Tolerancia"><button class="btn sm" id="tRemove">Quitar fondo</button><button class="btn sm" id="tCrop">Recortar</button></div>
       <div class="tg"><span>Pixel</span><input type="number" id="pxW" value="64" min="8" max="512" title="Ancho en píxeles"><input type="number" id="pxC" value="16" min="2" max="64" title="Colores"><button class="btn sm" id="tPixel">Pixelar</button></div>
       <div class="tg"><span>Tile</span><button class="btn sm" id="tSeam">Hacer tileable</button><button class="btn sm" id="tTile">Ver mosaico</button></div>
-      <div class="tg" id="tsGroup"><span>Tileset</span><select id="tsB" title="Segundo terreno (textura de la biblioteca)"></select><select id="tsT" title="Tamaño de tile"><option>16</option><option selected>32</option><option>48</option><option>64</option><option>128</option></select><select id="tsMode"><option value="pixel">Pixel + contorno</option><option value="soft">Suave HD</option></select><button class="btn sm pri" id="tTileset">Crear autotile</button></div>
+      <div class="tg" id="tsGroup"><span>Tileset</span><select id="tsB" title="Segundo terreno (textura de la biblioteca)"></select><select id="tsT" title="Tamaño de tile"><option>16</option><option selected>32</option><option>48</option><option>64</option><option>128</option></select><select id="tsMode"><option value="pixel">Pixel + contorno</option><option value="soft">Suave HD</option></select><button class="btn sm pri" id="tTileset">Crear autotile</button><button class="btn sm" id="tPaint" style="display:none">🖌 Pintar mapa</button></div>
+      <div class="tg"><span>Luz 2D</span><button class="btn sm" id="tNormal" title="Normal map para iluminación 2D (Godot, Unity) con vista previa de luz">Normal map + luz</button></div>
       <div class="tg"><span>Tamaño</span><select id="potSel"><option value="0">POT auto</option><option>2048</option><option>1024</option><option>512</option><option>256</option><option>128</option><option>64</option><option>32</option></select><button class="btn sm" id="tResize">Redimensionar</button></div>
       <div class="tg"><button class="btn sm" id="tUndo">↶ Deshacer</button><button class="btn sm pri" id="tSave">Guardar versión</button><button class="btn sm" id="tDl">⬇ PNG</button></div>
       <div class="tg" id="animMake"><span>Animar</span><select id="animSel"></select><button class="btn sm" id="tAnim">Generar fotogramas</button></div>
@@ -310,6 +320,7 @@ details.sec summary::-webkit-details-marker{display:none}
       <div class="row"><input type="text" id="q" placeholder="Buscar nombre o tag…"><div class="seg" id="kindSeg"><button data-k="" class="on">Todo</button><button data-k="2d">2D</button><button data-k="3d">3D</button><button data-k="fav" title="Favoritos">★</button></div></div>
     </div>
     <div class="grid" id="grid"></div>
+    <div class="libf exp"><button class="btn sm" id="btnPalette" title="Mismos colores exactos para los sprites marcados con Ctrl+clic (o los del filtro actual)">🎨 Paleta común</button></div>
     <div class="libf exp"><select id="expEng"><option value="godot">Godot 4</option><option value="unity">Unity</option><option value="generic">ZIP genérico</option></select><button class="btn sm pri" id="btnExport" title="Exporta los assets marcados con Ctrl+clic (o los 40 más recientes)">⬇ Exportar a motor</button></div>
     <div class="libf"><code id="libPath"></code><button class="btn sm danger" id="delBtn" disabled>Borrar</button></div>
   </aside>
@@ -376,8 +387,10 @@ details.sec summary::-webkit-details-marker{display:none}
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="studio" id="studio"><div class="sbar"><b id="stTitle"></b><div id="stTools" class="stt"></div><button class="btn sm" id="stClose">Cerrar</button></div><div class="sbody" id="stBody"></div></div>
 <div class="jobsdock" id="jobsDock"><div class="jh"><b>Trabajos</b><span class="hint">Clic: ver su registro · ✕: cancelar</span><button class="btn sm ghost" onclick="this.closest('.jobsdock').classList.remove('show')">Cerrar</button></div><div id="jobsList"></div></div>
 
+<script src="forge-tools.js"></script>
 <script type="module">
 const $ = (s) => document.querySelector(s);
 const api = async (url, opt = {}) => {
@@ -689,6 +702,7 @@ async function openAsset(id) {
   if (isAnim) $('#animFps').value = CUR.fps || 8;
   stopAnim();
   $('#tsGroup').style.display = CUR.kind === '2d' && !isAnim ? 'flex' : 'none'; fillTilesetSel();
+  $('#tPaint').style.display = latestTileset() ? '' : 'none';
   renderGrid();
   await openFile(CUR.files.includes(def) ? def : CUR.files[0]);
 }
@@ -714,42 +728,6 @@ function snapshot() { const c = document.createElement('canvas'); c.width = cv.w
 function setFrom(c) { cv.width = c.width; cv.height = c.height; ctx.clearRect(0, 0, cv.width, cv.height); ctx.drawImage(c, 0, 0); refresh2D(); }
 function op(fn) { snapshot(); try { fn(); } catch (e) { HIST.pop(); toast(e.message, 1); } refresh2D(); }
 
-function cornerColor(d, w, h) {
-  const pts = []; const s = Math.max(2, Math.round(Math.min(w, h) * 0.01));
-  for (const [cx, cy] of [[0, 0], [w - s, 0], [0, h - s], [w - s, h - s]]) for (let y = cy; y < cy + s; y++) for (let x = cx; x < cx + s; x++) { const i = (y * w + x) * 4; pts.push([d[i], d[i + 1], d[i + 2]]); }
-  const med = (k) => pts.map((p) => p[k]).sort((a, b) => a - b)[pts.length >> 1];
-  return [med(0), med(1), med(2)];
-}
-function removeBg(tol, target = cv) {
-  const tx = target.getContext('2d', { willReadFrequently: true });
-  const w = target.width, h = target.height, id = tx.getImageData(0, 0, w, h), d = id.data;
-  const bg = cornerColor(d, w, h);
-  const dist = (p) => { const i = p * 4; const r = d[i] - bg[0], g = d[i + 1] - bg[1], b = d[i + 2] - bg[2]; return Math.sqrt(r * r + g * g + b * b); };
-  const N = w * h, mark = new Uint8Array(N), st = new Int32Array(N); let sp = 0;
-  const push = (p) => { if (!mark[p] && d[p * 4 + 3] > 0 && dist(p) <= tol) { mark[p] = 1; st[sp++] = p; } };
-  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
-  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
-  while (sp) { const p = st[--sp], x = p % w; if (x > 0) push(p - 1); if (x < w - 1) push(p + 1); if (p >= w) push(p - w); if (p < N - w) push(p + w); }
-  // borde suave + descontaminación de color
-  for (let p = 0; p < N; p++) {
-    if (mark[p]) { d[p * 4 + 3] = 0; continue; }
-    const x = p % w;
-    const near = (x > 0 && mark[p - 1]) || (x < w - 1 && mark[p + 1]) || (p >= w && mark[p - w]) || (p < N - w && mark[p + w]);
-    if (!near) continue;
-    const dd = dist(p); if (dd > tol * 2.2) continue;
-    const a = Math.max(0.15, Math.min(1, (dd - tol) / (tol * 1.2)));
-    const i = p * 4;
-    for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, (d[i + k] - bg[k] * (1 - a)) / a));
-    d[i + 3] = Math.round(d[i + 3] * a);
-  }
-  tx.putImageData(id, 0, 0);
-}
-function alphaBox(c) {
-  const w = c.width, h = c.height, d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-  let x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-}
 function autoCrop(pad = 8) {
   const w = cv.width, h = cv.height, d = ctx.getImageData(0, 0, w, h).data;
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
@@ -758,36 +736,7 @@ function autoCrop(pad = 8) {
   x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
   const c = document.createElement('canvas'); c.width = x1 - x0 + 1; c.height = y1 - y0 + 1; c.getContext('2d').drawImage(cv, -x0, -y0); setFrom(c);
 }
-function kmeans(px, k) {
-  const n = px.length / 3; if (!n) return [];
-  const C = [];
-  C.push([px[0], px[1], px[2]]);
-  while (C.length < Math.min(k, n)) { // k-means++ aproximado
-    let best = -1, bi = 0;
-    for (let s = 0; s < 400; s++) { const i = Math.floor(Math.random() * n) * 3; let m = Infinity; for (const c of C) { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; m = Math.min(m, dr * dr + dg * dg + db * db); } if (m > best) { best = m; bi = i; } }
-    C.push([px[bi], px[bi + 1], px[bi + 2]]);
-  }
-  const asg = new Uint8Array(n);
-  for (let it = 0; it < 10; it++) {
-    const S = C.map(() => [0, 0, 0, 0]);
-    for (let j = 0; j < n; j++) { const i = j * 3; let m = Infinity, mi = 0; C.forEach((c, ci) => { const dr = px[i] - c[0], dg = px[i + 1] - c[1], db = px[i + 2] - c[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; mi = ci; } }); asg[j] = mi; const s = S[mi]; s[0] += px[i]; s[1] += px[i + 1]; s[2] += px[i + 2]; s[3]++; }
-    S.forEach((s, ci) => { if (s[3]) C[ci] = [s[0] / s[3], s[1] / s[3], s[2] / s[3]]; });
-  }
-  return C.map((c) => c.map(Math.round));
-}
 function pixelate(tw, colors) { setFrom(pixelateCanvas(cv, tw, colors)); }
-function pixelateCanvas(base, tw, colors) {
-  tw = Math.max(8, Math.min(512, tw | 0)); const th = Math.max(1, Math.round(base.height * tw / base.width));
-  // reducción por pasos para promediar bien
-  let src = base;
-  while (src.width / 2 > tw) { const c = document.createElement('canvas'); c.width = Math.round(src.width / 2); c.height = Math.round(src.height / 2); const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height); src = c; }
-  const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th);
-  const id = x.getImageData(0, 0, tw, th), d = id.data, px = [];
-  for (let i = 0; i < d.length; i += 4) { d[i + 3] = d[i + 3] < 128 ? 0 : 255; if (d[i + 3]) px.push(d[i], d[i + 1], d[i + 2]); }
-  const pal = kmeans(px, colors);
-  for (let i = 0; i < d.length; i += 4) { if (!d[i + 3]) continue; let m = Infinity, b = pal[0]; for (const p of pal) { const dr = d[i] - p[0], dg = d[i + 1] - p[1], db = d[i + 2] - p[2]; const dd = dr * dr + dg * dg + db * db; if (dd < m) { m = dd; b = p; } } d[i] = b[0]; d[i + 1] = b[1]; d[i + 2] = b[2]; }
-  x.putImageData(id, 0, 0); return c;
-}
 function makeSeamless() {
   const w = cv.width, h = cv.height;
   const off = document.createElement('canvas'); off.width = w; off.height = h; const o = off.getContext('2d');
@@ -816,7 +765,7 @@ function resizePOT(target) {
   const c = document.createElement('canvas'); c.width = tw; c.height = th; const x = c.getContext('2d'); x.imageSmoothingEnabled = !pix; x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, tw, th); setFrom(c);
 }
 function updateTile() { const url = cv.toDataURL(); const t = $('#tile'); t.style.backgroundImage = `url(${url})`; const s = Math.min(t.clientWidth, t.clientHeight) / 3; t.style.backgroundSize = `${s}px ${s * cv.height / cv.width}px`; t.style.imageRendering = cv.width <= 512 ? 'pixelated' : 'auto'; }
-$('#tRemove').onclick = () => op(() => removeBg(+$('#tol').value));
+$('#tRemove').onclick = () => op(() => removeBg(+$('#tol').value, cv));
 $('#tCrop').onclick = () => op(() => autoCrop());
 $('#tPixel').onclick = () => op(() => pixelate(+$('#pxW').value, Math.max(2, Math.min(64, +$('#pxC').value || 16))));
 $('#tSeam').onclick = () => op(makeSeamless);
@@ -833,6 +782,80 @@ $('#tSave').onclick = async () => {
 $('#tEdit').onclick = () => {
   const t = $('#editTxt').value.trim(); if (!CUR || !t) return toast('Escribe la variación (p. ej. “mismo personaje atacando”)', 1);
   runJob({ action: 'edit', assetId: CUR.id, file: CURFILE, prompt: t, quality: $('#quality').value, enhance: $('#enhance').checked }, 'Creando variación con FLUX Kontext…');
+};
+// ───────── Estudio a pantalla completa (pintor de mapas, luz 2D) ─────────
+function openStudio(title, toolsHtml) { $('#stTitle').textContent = title; $('#stTools').innerHTML = toolsHtml; $('#stBody').innerHTML = ''; $('#studio').classList.add('show'); }
+$('#stClose').onclick = () => { $('#studio').classList.remove('show'); STUDIO_CLOSE && STUDIO_CLOSE(); STUDIO_CLOSE = null; };
+let STUDIO_CLOSE = null;
+const latestTileset = () => CUR && CUR.files.filter((f) => /^tileset_.*_\d+\.png$/.test(f)).pop();
+const saveText = (name, txt) => post(`/api/assets/${CUR.id}/file`, { name, data: b64(txt) });
+$('#tPaint').onclick = async () => {
+  const png = latestTileset(); if (!png) return toast('Crea primero un autotile', 1);
+  const T = +png.match(/_(\d+)\.png$/)[1], base = png.replace(/\.png$/, '');
+  const sheet = await loadImg(CUR.url + png + '?t=' + Date.now());
+  openStudio('Pintor de mapas · ' + base, `<div class="seg seg2" id="mpVal"><button data-v="0">Terreno A</button><button data-v="1" class="on">Terreno B</button></div>
+    <label>Pincel <input type="range" id="mpBrush" min="1" max="6" value="2"></label>
+    <label>Columnas <input type="number" id="mpCols" value="${Math.round(1280 / T)}" min="4" max="256"></label><label>Filas <input type="number" id="mpRows" value="${Math.round(720 / T)}" min="4" max="256"></label>
+    <button class="btn sm" id="mpRand">🎲 Aleatorio</button><button class="btn sm" id="mpFillA">Todo A</button><button class="btn sm" id="mpUndo">↶</button>
+    <button class="btn sm" id="mpPng">⬇ PNG</button><button class="btn sm pri" id="mpSave">Guardar mapa (PNG + Tiled + Godot)</button>
+    <span class="hint" style="margin:0">Clic: pinta · clic derecho o Mayús: borra</span>`);
+  const c = document.createElement('canvas'); $('#stBody').append(c);
+  const MP = new MapPainter(c, sheet, T, { cols: +$('#mpCols').value, rows: +$('#mpRows').value });
+  MP.brush = 2; MP.random(Date.now() % 1000);
+  const fit = () => { const r = $('#stBody').getBoundingClientRect(); const k = Math.max(1, Math.floor(Math.min((r.width - 40) / c.width, (r.height - 40) / c.height) * 4) / 4); c.style.width = c.width * Math.min(k, 4) + 'px'; };
+  fit(); window.addEventListener('resize', fit); STUDIO_CLOSE = () => window.removeEventListener('resize', fit);
+  $('#mpVal').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; MP.value = +b.dataset.v; [...$('#mpVal').children].forEach((x) => x.classList.toggle('on', x === b)); };
+  $('#mpBrush').oninput = () => { MP.brush = +$('#mpBrush').value; };
+  $('#mpCols').onchange = $('#mpRows').onchange = () => { MP.resize(Math.max(4, Math.min(256, +$('#mpCols').value)), Math.max(4, Math.min(256, +$('#mpRows').value))); fit(); };
+  $('#mpRand').onclick = () => MP.random(Math.floor(Math.random() * 1e6)); $('#mpFillA').onclick = () => MP.fill(0); $('#mpUndo').onclick = () => MP.undo();
+  $('#mpPng').onclick = () => { const a = document.createElement('a'); a.href = MP.toCanvas().toDataURL('image/png'); a.download = 'mapa.png'; a.click(); };
+  $('#mpSave').onclick = async () => {
+    const n = CUR.files.filter((f) => /^map_\d+\.png$/.test(f)).length + 1, m = `map_${String(n).padStart(2, '0')}`;
+    try {
+      await post(`/api/assets/${CUR.id}/file`, { name: m + '.png', data: MP.toCanvas().toDataURL('image/png') });
+      await saveText(m + '.tmx', MP.toTMX(base + '.tsx')); await saveText(m + '.tscn', MP.toTSCN(base + '.tres'));
+      CUR = await saveText(m + '.json', MP.toJSON()); setHeader(); await loadLibrary();
+      toast(`Guardado ${m}: PNG, Tiled (.tmx) y escena de Godot (.tscn) junto al tileset`);
+    } catch (e) { toast(e.message, 1); }
+  };
+};
+$('#tNormal').onclick = async () => {
+  if (!CUR) return;
+  const color = document.createElement('canvas'); color.width = cv.width; color.height = cv.height; color.getContext('2d').drawImage(cv, 0, 0);
+  const small = cv.width * cv.height <= 300 * 300;
+  const N = normalMapCanvas(color, { strength: small ? 1.2 : 2.2 });
+  // vista previa a tamaño manejable
+  const k = Math.min(1, 340 / Math.max(color.width, color.height));
+  const shrink = (c) => { if (k === 1) return c; const o = document.createElement('canvas'); o.width = Math.round(c.width * k); o.height = Math.round(c.height * k); const x = o.getContext('2d'); x.drawImage(c, 0, 0, o.width, o.height); return o; };
+  const cs = shrink(color), ns = shrink(N);
+  openStudio('Luz 2D · ' + CUR.name, `<span class="hint" style="margin:0">Mueve el ratón sobre el sprite: es una luz puntual. Así se verá en Godot (CanvasTexture) o Unity (Sprite Lit).</span><div class="spacer"></div><button class="btn sm pri" id="nmSave">Guardar normal map</button>`);
+  const view = document.createElement('canvas'); view.width = cs.width; view.height = cs.height; const vx = view.getContext('2d');
+  const nv = document.createElement('canvas'); nv.width = ns.width; nv.height = ns.height; nv.getContext('2d').drawImage(ns, 0, 0);
+  const scale = Math.max(1, Math.floor(520 / Math.max(cs.width, cs.height))); for (const c of [view, nv]) { c.style.width = c.width * scale + 'px'; if (!small) c.style.imageRendering = 'auto'; }
+  $('#stBody').append(view, nv);
+  const draw = (lx, ly) => { vx.clearRect(0, 0, view.width, view.height); vx.drawImage(litPreview(cs, ns, lx, ly), 0, 0); const g = vx.createRadialGradient(lx, ly, 0, lx, ly, Math.max(4, cs.width * 0.06)); g.addColorStop(0, 'rgba(255,230,170,.95)'); g.addColorStop(1, 'rgba(255,200,120,0)'); vx.fillStyle = g; vx.beginPath(); vx.arc(lx, ly, Math.max(4, cs.width * 0.06), 0, Math.PI * 2); vx.fill(); };
+  draw(cs.width * 0.2, cs.height * 0.15);
+  view.onpointermove = (e) => { const r = view.getBoundingClientRect(); draw((e.clientX - r.left) / r.width * cs.width, (e.clientY - r.top) / r.height * cs.height); };
+  $('#nmSave').onclick = async () => {
+    const name = 'normal_' + (CURFILE || 'source.png').replace(/\.(jpe?g|webp)$/i, '.png');
+    try { CUR = await post(`/api/assets/${CUR.id}/file`, { name, data: N.toDataURL('image/png') }); setHeader(); toast('Guardado ' + name); } catch (e) { toast(e.message, 1); }
+  };
+};
+$('#btnPalette').onclick = async () => {
+  let list = PICK.size ? ASSETS.filter((a) => PICK.has(a.id)) : [];
+  if (!list.length) { const q = $('#q').value.trim().toLowerCase(); list = q ? ASSETS.filter((a) => [a.name, ...(a.tags || [])].join(' ').toLowerCase().includes(q)) : []; }
+  list = list.filter((a) => a.kind === '2d' && !['2d-texture', '2d-environment', '2d-concept', '2d-vfx'].includes(a.category));
+  if (list.length < 2) return toast('Marca al menos 2 sprites con Ctrl+clic (o filtra por pack:nombre)', 1);
+  busy(true, `Unificando la paleta de ${list.length} sprites…`);
+  try {
+    const pick = (a) => a.files.filter((f) => /^processed_02_pixel.*\.png$/.test(f)).pop() || a.files.filter((f) => /^processed_01.*\.png$/.test(f)).pop() || 'source.png';
+    const srcs = await Promise.all(list.map(async (a) => { const im = await loadImg(a.url + pick(a) + '?t=' + Date.now()); const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); return c; }));
+    const { palette, canvases } = unifyPalette(srcs, 24);
+    for (let i = 0; i < list.length; i++) await post(`/api/assets/${list[i].id}/file`, { name: `processed_03_palette_${canvases[i].width}x${canvases[i].height}.png`, data: canvases[i].toDataURL('image/png') });
+    await post(`/api/assets/${list[0].id}/file`, { name: 'palette.png', data: paletteStrip(palette, 1).toDataURL('image/png') });
+    await loadLibrary(); toast(`🎨 ${list.length} sprites con la misma paleta de ${palette.length} colores (palette.png en ${list[0].name})`);
+  } catch (e) { toast(e.message, 1); }
+  busy(false);
 };
 // ───────── Favoritos: lo que marcas con ★ enseña al director de arte ─────────
 $('#favBtn').onclick = async () => {
@@ -878,61 +901,6 @@ function fillTilesetSel() {
   for (const a of list) el.append(new Option((a.category === '2d-texture' ? '▦ ' : '') + a.name, a.id));
   if (cur) el.value = cur;
 }
-function periodicNoise(n, seed) { // ruido de valor periódico (n celdas por tile), continuo entre tiles
-  const g = []; let s = seed >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < n * n; i++) g.push(rnd());
-  const f = (t) => t * t * (3 - 2 * t);
-  return (u, v) => { const x = u * n, y = v * n, x0 = Math.floor(x), y0 = Math.floor(y), fx = f(x - x0), fy = f(y - y0);
-    const G = (i, j) => g[((j % n + n) % n) * n + ((i % n + n) % n)];
-    const a = G(x0, y0) + (G(x0 + 1, y0) - G(x0, y0)) * fx, b = G(x0, y0 + 1) + (G(x0 + 1, y0 + 1) - G(x0, y0 + 1)) * fx; return a + (b - a) * fy; };
-}
-function texPixels(img, T) { const c = document.createElement('canvas'); c.width = c.height = T; const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, T, T); return x.getImageData(0, 0, T, T).data; }
-function buildAutotile(imgA, imgB, T, mode) {
-  const A = texPixels(imgA, T), B = texPixels(imgB, T);
-  const n1 = periodicNoise(3, 7), n2 = periodicNoise(7, 19);
-  const out = document.createElement('canvas'); out.width = out.height = T * 4; const ox = out.getContext('2d'); const id = ox.createImageData(T * 4, T * 4); const D = id.data;
-  const mask = (c, u, v) => { const w = (c[0] * (1 - u) + c[1] * u) * (1 - v) + (c[3] * (1 - u) + c[2] * u) * v;
-    return w + ((n1(u, v) - 0.5) * 0.42 + (n2(u, v) - 0.5) * 0.16) * Math.min(1, 4 * w * (1 - w) + 0.15); };
-  for (let i = 0; i < 16; i++) {
-    const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1].map(Number); // TL, TR, BR, BL (1 = terreno B)
-    const tx = (i % 4) * T, ty = Math.floor(i / 4) * T;
-    const M = new Float32Array(T * T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) M[y * T + x] = mask(c, (x + 0.5) / T, (y + 0.5) / T);
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
-      const m = M[y * T + x], k = (y * T + x) * 4, o = ((ty + y) * T * 4 + tx + x) * 4;
-      let t, shade = 1;
-      if (mode === 'pixel') {
-        t = m >= 0.5 ? 1 : 0;
-        if (t) { const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = x + dx, Y = y + dy; return X >= 0 && Y >= 0 && X < T && Y < T && M[Y * T + X] < 0.5; }); if (nb) shade = 0.45; }
-        else if (m > 0.5 - 1.6 / T) shade = 0.72; // sombra de contacto en el lado A
-      } else {
-        const e = 0.06; t = Math.max(0, Math.min(1, (m - 0.5 + e) / (2 * e))); t = t * t * (3 - 2 * t);
-        const edge = Math.max(0, 1 - Math.abs(m - 0.5) / 0.14); shade = 1 - 0.28 * edge * (m < 0.5 ? 1 : 0.4);
-      }
-      for (let ch = 0; ch < 3; ch++) D[o + ch] = Math.max(0, Math.min(255, (A[k + ch] * (1 - t) + B[k + ch] * t) * shade));
-      D[o + 3] = 255;
-    }
-  }
-  ox.putImageData(id, 0, 0); return out;
-}
-function autotilePreview(sheet, T, cols = 14, rows = 9) {
-  const V = []; for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) { const d = Math.hypot(i - cols / 2, (j - rows / 2) * 1.4); const d2 = Math.hypot(i - cols * 0.18, (j - rows * 0.2) * 1.3); V.push(d < 3.2 + Math.sin(i * 1.7 + j) * 0.9 || d2 < 1.6 ? 1 : 0); }
-  const P = document.createElement('canvas'); P.width = cols * T; P.height = rows * T; const px = P.getContext('2d'); px.imageSmoothingEnabled = false;
-  const at = (i, j) => V[j * (cols + 1) + i];
-  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const idx = at(i, j) | at(i + 1, j) << 1 | at(i + 1, j + 1) << 2 | at(i, j + 1) << 3; px.drawImage(sheet, (idx % 4) * T, Math.floor(idx / 4) * T, T, T, i * T, j * T, T, T); }
-  return P;
-}
-function tilesetTSX(name, png, T, nameA, nameB) {
-  let w = ''; for (let i = 0; i < 16; i++) { const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1].map((v) => v + 1); w += `   <wangtile tileid="${i}" wangid="0,${c[1]},0,${c[2]},0,${c[3]},0,${c[0]}"/>\n`; }
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<tileset version="1.10" tiledversion="1.11.0" name="${name}" tilewidth="${T}" tileheight="${T}" tilecount="16" columns="4">\n <image source="${png}" width="${T * 4}" height="${T * 4}"/>\n <wangsets>\n  <wangset name="${name}" type="corner" tile="-1">\n   <wangcolor name="${nameA}" color="#4a8f3c" tile="0" probability="1"/>\n   <wangcolor name="${nameB}" color="#a5773f" tile="15" probability="1"/>\n${w}  </wangset>\n </wangsets>\n</tileset>\n`;
-}
-function tilesetTRES(png, T, nameA, nameB) {
-  const bits = ['top_left_corner', 'top_right_corner', 'bottom_right_corner', 'bottom_left_corner'];
-  let t = '';
-  for (let i = 0; i < 16; i++) { const c = [i & 1, (i >> 1) & 1, (i >> 2) & 1, (i >> 3) & 1]; const k = `${i % 4}:${Math.floor(i / 4)}/0`;
-    t += `${k} = 0\n${k}/terrain_set = 0\n${k}/terrain = ${c.reduce((a, b) => a + b, 0) >= 2 ? 1 : 0}\n` + bits.map((b, j) => `${k}/terrains_peering_bit/${b} = ${c[j]}\n`).join(''); }
-  return `[gd_resource type="TileSet" load_steps=3 format=3]\n\n[ext_resource type="Texture2D" path="${png}" id="1_tex"]\n\n[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_1"]\ntexture = ExtResource("1_tex")\ntexture_region_size = Vector2i(${T}, ${T})\n${t}\n[resource]\ntile_size = Vector2i(${T}, ${T})\nterrain_set_0/mode = 1\nterrain_set_0/terrain_0/name = "${nameA}"\nterrain_set_0/terrain_0/color = Color(0.29, 0.56, 0.24, 1)\nterrain_set_0/terrain_1/name = "${nameB}"\nterrain_set_0/terrain_1/color = Color(0.65, 0.47, 0.25, 1)\nsources/0 = SubResource("TileSetAtlasSource_1")\n`;
-}
 const b64 = (txt) => 'data:text/plain;base64,' + btoa(unescape(encodeURIComponent(txt)));
 $('#tTileset').onclick = async () => {
   if (!CUR) return; const bId = $('#tsB').value; const B = ASSETS.find((a) => a.id === bId);
@@ -951,7 +919,7 @@ $('#tTileset').onclick = async () => {
     const prev = autotilePreview(sheet, T);
     CUR = await post(`/api/assets/${CUR.id}/file`, { name: base + '_preview.png', data: prev.toDataURL('image/png') });
     await loadLibrary(); CURFILE = base + '_preview.png'; setHeader(); await openFile(CURFILE);
-    toast('Autotile listo: PNG + Tiled (.tsx) + Godot (.tres)');
+    $('#tPaint').style.display = ''; toast('Autotile listo: PNG + Tiled (.tsx) + Godot (.tres) · pulsa 🖌 Pintar mapa');
   } catch (e) { toast(e.message, 1); }
   busy(false);
 };

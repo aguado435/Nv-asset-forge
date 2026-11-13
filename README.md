@@ -31,6 +31,9 @@
 | **Cola de trabajos** ★ | Lanza varios trabajos a la vez sin bloquear la app, con progreso, registro por trabajo y botón de cancelar (también detiene Blender) | Local |
 | **Pack coherente** ★ | Una frase → un LLM diseña la biblia de estilo y la lista de assets (héroe, enemigos, props, iconos, texturas, fondo, VFX) y FLUX los pinta todos con las mismas reglas visuales | NVIDIA |
 | **Autotiles** ★ | Dos texturas → tileset de 16 tiles con transición orgánica por esquinas (pixel con contorno o HD suave) + `.tsx` de Tiled + `.tres` de Godot 4 con terreno ya configurado | Local (navegador) |
+| **Pintor de mapas** ★ | Pinta niveles con tus autotiles (pincel, aleatorio, deshacer) y guárdalos como PNG, mapa de Tiled (`.tmx`) y escena de Godot 4 (`.tscn`) | Local (navegador) |
+| **Luz 2D** ★ | Normal map de cualquier sprite con vista previa de luz interactiva (mueve el ratón), para Godot `CanvasTexture` y Unity Sprite Lit | Local (navegador) |
+| **Paleta común** ★ | Los sprites marcados (o un pack entero) pasan a compartir exactamente la misma paleta de colores; guarda `palette.png` | Local (navegador) |
 | **Exportar a motor** ★ | ZIP listo para Godot 4 (`res://nvforge`), Unity (`Assets/NVForge`) o genérico, con `manifest.json` (prompt, semilla, modelo de cada asset) | Local |
 | **Assets 2D** | Personajes, objetos, iconos, texturas repetibles, fondos, UI, efectos VFX y concept art | NVIDIA (FLUX.2 klein, FLUX.1) |
 | **Modelos 3D pro en Blender** | Un LLM modela el asset con un kit de piezas, FLUX.2 pone las texturas y un modelo de visión lo revisa como director de arte | NVIDIA + Blender local |
@@ -227,5 +230,6 @@ La técnica: **geometría low poly + imágenes FLUX muy detalladas encima** (fac
 
 - `server.js`: servidor HTTP sin dependencias (Node 18+). API: `/api/generate` (trabajos: assets, `pack`, `world`, `game`…), `/api/export` (ZIP para motores), `/api/assets`, `/api/project`, `/api/games`, `/api/blender`, `/api/config`.
 - `public/index.html`: toda la interfaz en un archivo (three.js desde CDN).
+- `public/forge-tools.js`: herramientas 2D del navegador (quitar fondo, pixel art, autotiles, pintor de mapas, normal maps, paleta). Forge Lite usa una copia en `docs/forge-tools.js`: si lo cambias, cópialo allí.
 - `blender/nvf_blender.py`: operaciones `process` y `render`; se puede usar sola: `blender -b -P blender/nvf_blender.py -- trabajo.json`.
 - Atajo: `Ctrl+Enter` en la descripción para generar.
